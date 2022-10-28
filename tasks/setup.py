@@ -1,8 +1,15 @@
 # setup.py
-from setuptools import setup
+from setuptools import setup, find_packages
 
 setup(
-    name='OSIL Environments',
+    name='robosuite_env',
     version='0.0.1',
-    packages=['robosuite_env'],
+    include_package_data=True,
+    packages=find_packages(exclude=['test_models']),
+    package_data={"robosuite_env.objects": ['*','*/*','*/*/*','*/*/*/*'],
+                  "robosuite_env.arena": ['*','*/*']}
 )
+
+if __name__ == "__main__":
+    packages = find_packages(exclude=['test_models'])
+    print(packages)
