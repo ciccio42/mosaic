@@ -4,29 +4,9 @@ from pyquaternion import Quaternion
 import robosuite.utils.transform_utils as T
 import copy
 
-
-def normalize_action(action, ranges):
-    # normalizing action: pos + axis-angle
-    norm_action = action.copy()
-    for d in range(ranges.shape[0]):
-        norm_action[d] = 2 * (norm_action[d] - ranges[d,0]) / (ranges[d,1] - ranges[d,0]) - 1
-    return (norm_action * 128).astype(np.int32).astype(np.float32) / 128
-
-def denormalize_action(norm_action, base_pos, base_quat, ranges):
-    action = np.clip(norm_action.copy(), -1, 1)
-    for d in range(ranges.shape[0]):
-        action[d] = 0.5 * (action[d] + 1) * (ranges[d,1] - ranges[d,0]) + ranges[d,0]
-    if norm_action.shape[0] == 7:
-        cmd_quat = T.axisangle2quat(action[3:6])
-        quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
-        aa = T.quat2axisangle(quat)
-        return np.concatenate((action[:3] - base_pos, aa, action[6:]))
-    else:
-        cmd_quat = Quaternion(angle=action[3] * np.pi, axis=action[4:7])
-        cmd_quat = np.array([cmd_quat.x, cmd_quat.y, cmd_quat.z, cmd_quat.w])
-        quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
-        aa = T.quat2axisangle(quat)
-        return np.concatenate((action[:3] - base_pos, aa, action[7:]))
+import logging
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+pick_place_logger = logging.getLogger(name="PickPlaceLogger")
 
 def get_rel_action(action, base_pos, base_quat):
     if action.shape[0] == 7:
@@ -115,7 +95,7 @@ class CustomOSCPoseWrapper(Wrapper):
             R_ee_world = T.matrix_inverse(T.quat2mat(base_quat))
             # Compute the delta with rispect to the base frame
             delta_world = R_w_new_ee @ R_ee_world
-            # print(f"Delta world {T.mat2euler(delta_world)}")
+            # pick_place_logger.debug(f"Delta world {T.mat2euler(delta_world)}")
             euler = -T.mat2euler(delta_world)
             aa = T.quat2axisangle(T.mat2quat(T.euler2mat(euler)))
             return np.concatenate((action[:3] - base_pos, aa, action[6:]))
@@ -129,24 +109,24 @@ class CustomOSCPoseWrapper(Wrapper):
             R_ee_world = T.matrix_inverse(T.quat2mat(base_quat))
             # Compute the delta with rispect to the base frame
             delta_world = R_w_new_ee @ R_ee_world
-            # print(f"Delta world {T.mat2euler(delta_world)}")
+            # pick_place_logger.debug(f"Delta world {T.mat2euler(delta_world)}")
             euler = -T.mat2euler(delta_world)
             aa = T.quat2axisangle(T.mat2quat(T.euler2mat(euler)))
             return np.concatenate((action[:3] - base_pos, aa, action[7:]))
 
     def step(self, action):
         reward = -100.0
-        print("-------------------------------------------")
+        pick_place_logger.debug("-------------------------------------------")
         for _ in range(self.action_repeat):
             # take the current position and gripper orientation with respect to world
-            print(f"Target position {action[:3]}")
+            pick_place_logger.debug(f"Target position {action[:3]}")
             base_pos = self.env.sim.data.site_xpos[self.env.robots[0].eef_site_id]
             base_quat = T.mat2quat(np.reshape(self.env.sim.data.site_xmat[self.env.robots[0].eef_site_id], (3,3)))
             global_action = self.convert_rotation_gripper_to_world(action, base_pos, base_quat)
-            print(f"Global delta position {global_action[:3]}")
+            pick_place_logger.debug(f"Global delta position {global_action[:3]}")
             obs, reward_t, done, info = self.env.step(global_action)
             reward = max(reward, reward_t)
-        print("----------------------------------------------\n\n")
+        pick_place_logger.debug("----------------------------------------------\n\n")
         return post_proc_obs(obs, self.env), reward, done, info
 
     def reset(self):

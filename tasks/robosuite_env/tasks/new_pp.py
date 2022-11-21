@@ -103,10 +103,13 @@ class PickPlace(SingleArmEnv):
             robots,
             env_configuration="default",
             controller_configs=None,
+            mount_types="default",
             gripper_types="default",
+            robot_offset=None,
             initialization_noise="default",
             table_full_size=(0.8, 0.8, 0.05),
             table_friction=(1., 5e-3, 1e-4),
+            table_offset=(0, 0, 0.82),
             use_camera_obs=True,
             use_object_obs=True,
             reward_scale=1.0,
@@ -126,13 +129,17 @@ class PickPlace(SingleArmEnv):
             camera_heights=256,
             camera_widths=256,
             camera_depths=False,
+            camera_poses=None,
+            camera_attribs=None,
             task_id = 0,
             object_type=None,
+            y_ranges=[[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
     ):
         # settings for table top
         self.table_full_size = table_full_size
         self.table_friction = table_friction
-        self.table_offset = np.array((0, 0, 0.82))
+        self.table_offset = np.array(table_offset)
+        self.robot_offset = robot_offset
         self.object_id = int(task_id//4)
         self.bin_id = task_id % 4
         self.bin_size = np.array((0.16, 0.16))
@@ -148,6 +155,7 @@ class PickPlace(SingleArmEnv):
             self.object_id = self.object_to_id[
                 object_type
             ]  # use for convenient indexing
+        self.y_ranges = y_ranges
 
         # reward configuration
         self.reward_scale = reward_scale
@@ -159,11 +167,15 @@ class PickPlace(SingleArmEnv):
         # object placement initializer
         self.placement_initializer = placement_initializer
 
+        # camera poses and attributes
+        self.camera_poses = camera_poses
+        self.camera_attribs = camera_attribs
+
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
             controller_configs=controller_configs,
-            mount_types="default",
+            mount_types=mount_types,
             gripper_types=gripper_types,
             initialization_noise=initialization_noise,
             use_camera_obs=use_camera_obs,
@@ -217,7 +229,10 @@ class PickPlace(SingleArmEnv):
         super()._load_model()
 
         # Adjust base pose accordingly
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        if self.robot_offset is None:
+            xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        else:
+            xpos = self.robot_offset
         self.robots[0].robot_model.set_base_xpos(xpos)
 
         # load model for table top workspace
@@ -227,8 +242,19 @@ class PickPlace(SingleArmEnv):
             table_offset=self.table_offset,
         )
 
+        # add desired cameras
+        if self.camera_poses is not None:
+            for camera_name in self.camera_poses.keys():
+                mujoco_arena.set_camera(camera_name=camera_name, 
+                                        pos=self.camera_poses[camera_name][0],
+                                        quat=self.camera_poses[camera_name][1],
+                                        camera_attribs=self.camera_attribs)
+
+
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
+
+        # Set camera position and names
 
         # initialize objects of interest
         self.bin = [Bin(name='bin')]
@@ -271,8 +297,6 @@ class PickPlace(SingleArmEnv):
         Helper function for defining placement initializer and object sampling bounds.
         """
         self.placement_initializer = SequentialCompositeSampler(name="ObjectSampler")
-        #y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
-        y_ranges = [[0.25, 0.30], [0.05, 0.10], [-0.10, -0.15], [-0.30, -0.35]]
         arr = np.arange(4)
         np.random.shuffle(arr)
 
@@ -282,7 +306,7 @@ class PickPlace(SingleArmEnv):
                     name='obj'+str(i)+"Sampler",
                     mujoco_objects=self.objects[i],
                     x_range=[-0.065, -0.035],
-                    y_range=y_ranges[arr[i]],
+                    y_range=self.y_ranges[arr[i]],
                     rotation=[0, 0 + 1e-4],
                     rotation_axis='z',
                     ensure_object_boundary_in_range=False,

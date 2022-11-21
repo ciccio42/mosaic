@@ -4,7 +4,6 @@ from pathlib import Path
 if str(Path.cwd()) not in sys.path:
     sys.path.insert(0, str(Path.cwd()))
 import numpy as np
-from robosuite_env import get_env
 from mosaic.datasets import Trajectory
 import pybullet as p
 from pyquaternion import Quaternion
@@ -17,6 +16,8 @@ import torch
 import os
 import mujoco_py
 import robosuite.utils.transform_utils as T
+import robosuite_env.utils as utils
+from robosuite_env import get_env
 
 import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
@@ -178,8 +179,7 @@ class PickPlaceController:
         return action, status
 
 
-def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False,
-                          seed=None, env_seed=None, depth=False, heights=100, widths=200, gpu_id=0, **kwargs):
+def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False, seed=None, env_seed=None, gpu_id=0, render_camera="frontview",**kwargs):
     assert 'gpu' in str(mujoco_py.cymj), 'Make sure to render with GPU to make eval faster'
     # reassign the gpu id
     visible_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
@@ -204,11 +204,17 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     if ret_env:
         while True:
             try:
-                env = get_env(env_type, controller_configs=controller_type,
-                              task_id=task, has_renderer=renderer, has_offscreen_renderer=camera_obs,
-                              reward_shaping=False, use_camera_obs=camera_obs, camera_heights=heights, camera_widths=widths,
-                              camera_depths=depth, ranges=action_ranges,
-                              camera_names="agentview", render_gpu_device_id=gpu_id, **kwargs)
+                env = get_env(env_type, 
+                              controller_configs=controller_type,
+                              task_id=task,
+                              has_renderer=renderer,
+                              has_offscreen_renderer=camera_obs,
+                              reward_shaping=False,
+                              use_camera_obs=camera_obs,
+                              ranges=action_ranges,
+                              render_gpu_device_id=gpu_id,
+                              render_camera=render_camera,
+                              **kwargs)
                 break
             except RandomizationError:
                 pass
@@ -217,12 +223,17 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     tries = 0
     while True:
         try:
-            env = get_env(env_type, controller_configs=controller_type,
-                          task_id=task, has_renderer=renderer, has_offscreen_renderer=camera_obs,
-                          reward_shaping=False, use_camera_obs=camera_obs, camera_heights=heights,
-                          camera_widths=widths, camera_depths=depth, ranges=action_ranges,
-                          camera_names="agentview",
-                          render_gpu_device_id=gpu_id, **kwargs)
+            env = get_env(env_type,
+                          controller_configs=controller_type,
+                          task_id=task,
+                          has_renderer=renderer,
+                          has_offscreen_renderer=camera_obs,
+                          reward_shaping=False,
+                          use_camera_obs=camera_obs,
+                          ranges=action_ranges,
+                          render_gpu_device_id=gpu_id,
+                          render_camera=render_camera,
+                          **kwargs)
             break
         except RandomizationError:
             pass
@@ -274,8 +285,14 @@ if __name__ == '__main__':
     debugpy.listen(('0.0.0.0', 5678))
     print("Waiting for debugger attach")
     debugpy.wait_for_client()
+    # Load configuration files
     current_dir = os.path.dirname(os.path.abspath(__file__))
     controller_config_path = os.path.join(current_dir,"../config/osc_pose.json")
-    config = load_controller_config(custom_fpath=controller_config_path)
+    controller_config = load_controller_config(custom_fpath=controller_config_path)
     for i in range(8, 16):
-        traj = get_expert_trajectory('UR5ePickPlaceDistractor', config, renderer=True, camera_obs=False, task=i, render_camera='frontview')
+        traj = get_expert_trajectory('UR5ePickPlaceDistractor', 
+                                    controller_type=controller_config,
+                                    renderer=True, 
+                                    camera_obs=False, 
+                                    task=i, 
+                                    render_camera='camera_front')

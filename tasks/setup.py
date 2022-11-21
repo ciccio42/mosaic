@@ -7,7 +7,10 @@ setup(
     include_package_data=True,
     packages=find_packages(exclude=['test_models']),
     package_data={"robosuite_env.objects": ['*','*/*','*/*/*','*/*/*/*'],
-                  "robosuite_env.arena": ['*','*/*']}
+                  "robosuite_env.arena": ['*','*/*'],
+                  "robosuite_env.controllers": ['*','*/*'],
+                  "robosuite_env.utils": ['*'],
+                  "robosuite_env.config": ['*']}
 )
 
 if __name__ == "__main__":

@@ -1,3 +1,5 @@
+import robosuite_env.utils.utils as utils
+
 def get_env(env_name, ranges, **kwargs):
     if env_name == 'SawyerPickPlaceDistractor':
         from robosuite_env.tasks.new_pp import SawyerPickPlace
@@ -53,9 +55,27 @@ def get_env(env_name, ranges, **kwargs):
     else:
         raise NotImplementedError
     
+    # get env configuration file
+    env_conf = utils.read_conf_file(task_name=env_name)
+
+    env = env(mount_types=env_conf['mount_types'],
+              gripper_types=env_conf['gripper_types'],
+              table_full_size=env_conf['table_full_size'],
+              table_offset=env_conf['table_offset'],
+              robot_offset=env_conf['robot_offset'],
+              horizon=env_conf['horizon'],
+              camera_names=env_conf['camera_names'],
+              camera_heights=env_conf['camera_heights'],
+              camera_widths=env_conf['camera_widths'],
+              camera_depths=env_conf['camera_depths'],
+              camera_poses=env_conf['camera_poses'],
+              camera_attribs=env_conf['camera_attribs'],
+              y_ranges=env_conf['y_ranges'],
+              **kwargs)
+
     if kwargs['controller_configs']['type'] == "IK_POSE":
         from robosuite_env.custom_ik_wrapper import CustomIKWrapper
-        return CustomIKWrapper(env(**kwargs), ranges=ranges)
+        return CustomIKWrapper(env, ranges=ranges)
     else:
         from robosuite_env.custom_osc_pose_wrapper import CustomOSCPoseWrapper
-        return CustomOSCPoseWrapper(env(**kwargs), ranges=ranges)
+        return CustomOSCPoseWrapper(env, ranges=ranges)

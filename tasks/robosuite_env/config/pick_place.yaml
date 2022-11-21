@@ -1,8 +1,0 @@
-# Configuration file for pick-and-place task
-robot_name: "UR5e"
-controller_name: "OSC_POSE"
-
-# ---- define the horizon steps ----
-prepare_grasp: 30
-approaching_obj: 30
-y_ranges: 
