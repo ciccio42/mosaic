@@ -5,6 +5,9 @@ def get_env(env_name, ranges, **kwargs):
     elif env_name == 'PandaPickPlaceDistractor':
         from robosuite_env.tasks.new_pp import PandaPickPlace
         env = PandaPickPlace
+    elif env_name == 'UR5ePickPlaceDistractor':
+        from robosuite_env.tasks.new_pp import UR5ePickPlace
+        env = UR5ePickPlace
     elif env_name == 'PandaNutAssemblyDistractor':
         from robosuite_env.tasks.nut_assembly import PandaNutAssemblyDistractor
         env = PandaNutAssemblyDistractor
@@ -50,5 +53,9 @@ def get_env(env_name, ranges, **kwargs):
     else:
         raise NotImplementedError
     
-    from robosuite_env.custom_ik_wrapper import CustomIKWrapper
-    return CustomIKWrapper(env(**kwargs), ranges=ranges)
+    if kwargs['controller_configs']['type'] == "IK_POSE":
+        from robosuite_env.custom_ik_wrapper import CustomIKWrapper
+        return CustomIKWrapper(env(**kwargs), ranges=ranges)
+    else:
+        from robosuite_env.custom_osc_pose_wrapper import CustomOSCPoseWrapper
+        return CustomOSCPoseWrapper(env(**kwargs), ranges=ranges)

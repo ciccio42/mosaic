@@ -271,7 +271,8 @@ class PickPlace(SingleArmEnv):
         Helper function for defining placement initializer and object sampling bounds.
         """
         self.placement_initializer = SequentialCompositeSampler(name="ObjectSampler")
-        y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+        #y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+        y_ranges = [[0.25, 0.30], [0.05, 0.10], [-0.10, -0.15], [-0.30, -0.35]]
         arr = np.arange(4)
         np.random.shuffle(arr)
 
@@ -448,6 +449,16 @@ class PickPlace(SingleArmEnv):
         if vis_settings["grippers"]:
             self._visualize_gripper_to_target(gripper=self.robots[0].gripper, target=self.drawers[self.drawer_id])
 
+class UR5ePickPlace(PickPlace):
+    """
+    Easier version of task - place one object into its bin.
+    A new object is sampled on every reset.
+    """
+
+    def __init__(self, task_id=None, **kwargs):
+        if task_id is None:
+            task_id = np.random.randint(0, 8)
+        super().__init__(robots=['UR5e'], task_id=task_id, **kwargs)
 
 class PandaPickPlace(PickPlace):
     """
