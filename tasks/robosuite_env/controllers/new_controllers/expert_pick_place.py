@@ -58,19 +58,19 @@ class PickPlaceController:
 
         if "Sawyer" in self._env.robot_names:
             self._obs_name = 'eef_pos'
-            self._default_speed = 0.13
+            self._default_speed = 0.02
             self._final_thresh = 1e-2
             # define the target gripper orientation with respect to the object
             self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
         elif "Panda" in self._env.robot_names:
             self._obs_name = 'eef_pos'
-            self._default_speed = 0.13
+            self._default_speed = 0.02
             self._final_thresh = 6e-2            
             # define the target gripper orientation with respect to the object
-            self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
+            self._target_gripper_wrt_obj_rot = np.array([[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
         elif "UR5e" in self._env.robot_names:
             self._obs_name = 'eef_pos'
-            self._default_speed = 0.01
+            self._default_speed = 0.02
             self._final_thresh = 6e-2
             # define the target gripper orientation with respect to the object
             self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
@@ -91,8 +91,12 @@ class PickPlaceController:
         dist_ur5e = {'milk': 0.03, 'can': 0.03, 'cereal': 0.03, 'bread': 0.03}
         if "Panda" in self._env.robot_names:
             self.dist = dist_panda
+            # gripper depth defines the distance between the TCP and the edge of the gripper
+            self._gripper_depth = 0.01
         elif "Sawyer" in self._env.robot_names:
             self.dist = dist_sawyer
+            # gripper depth defines the distance between the TCP and the edge of the gripper
+            self._gripper_depth = 0.038/2
         elif "UR5e" in self._env.robot_names:
             self.dist = dist_ur5e
             # gripper depth defines the distance between the TCP and the edge of the gripper
@@ -175,7 +179,7 @@ class PickPlaceController:
             status = 'placing'
 
         self._t += 1
-        print(f"Status {status}")
+        pick_place_logger.debug(f"Status {status}")
         return action, status
 
 
@@ -290,7 +294,7 @@ if __name__ == '__main__':
     controller_config_path = os.path.join(current_dir,"../config/osc_pose.json")
     controller_config = load_controller_config(custom_fpath=controller_config_path)
     for i in range(8, 16):
-        traj = get_expert_trajectory('UR5ePickPlaceDistractor', 
+        traj = get_expert_trajectory('UR5e_PickPlaceDistractor', 
                                     controller_type=controller_config,
                                     renderer=True, 
                                     camera_obs=False, 

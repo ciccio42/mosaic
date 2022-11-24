@@ -131,6 +131,7 @@ class PickPlace(SingleArmEnv):
             camera_depths=False,
             camera_poses=None,
             camera_attribs=None,
+            camera_gripper=None,
             task_id = 0,
             object_type=None,
             y_ranges=[[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
@@ -170,6 +171,7 @@ class PickPlace(SingleArmEnv):
         # camera poses and attributes
         self.camera_poses = camera_poses
         self.camera_attribs = camera_attribs
+        self.camera_gripper = camera_gripper
 
         super().__init__(
             robots=robots,
@@ -250,11 +252,16 @@ class PickPlace(SingleArmEnv):
                                         quat=self.camera_poses[camera_name][1],
                                         camera_attribs=self.camera_attribs)
 
+        # modify robot0_eye_in_hand
+        if self.robots[0].robot_model.default_gripper == "Robotiq85Gripper":
+            self.robots[0].robot_model.set_camera(camera_name="eye_in_hand",
+                                                  pos=self.camera_gripper["Robotiq85Gripper"]["pose"][0],
+                                                  quat=self.camera_gripper["Robotiq85Gripper"]["pose"][1],
+                                                  root=self.camera_gripper["Robotiq85Gripper"]["root"],
+                                                  camera_attribs=self.camera_attribs)
 
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
-
-        # Set camera position and names
 
         # initialize objects of interest
         self.bin = [Bin(name='bin')]
