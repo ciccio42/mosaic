@@ -54,7 +54,7 @@ class PickPlaceController:
         self._object_name = self._env.objects[self._env.object_id].name
         # TODO this line violates abstraction barriers but so does the reference implementation in robosuite
         self._jpos_getter = lambda: np.array(self._env._joint_positions)
-        self._clearance = 0.03 if 'milk' not in self._object_name else -0.01
+        self._clearance = 0.03 #0.03 if 'milk' not in self._object_name else -0.01
 
         if "Sawyer" in self._env.robot_names:
             self._obs_name = 'eef_pos'
@@ -114,7 +114,6 @@ class PickPlaceController:
             max_step = self._default_speed
 
         delta_pos = _clip_delta(delta_pos, max_step)
-        
         quat = np.array([quat.x, quat.y, quat.z, quat.w])
         aa = quat2axisangle(quat)
         
@@ -299,4 +298,4 @@ if __name__ == '__main__':
                                     renderer=True, 
                                     camera_obs=False, 
                                     task=i, 
-                                    render_camera='camera_front')
+                                    render_camera='robot0_eye_in_hand')

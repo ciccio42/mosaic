@@ -1,19 +1,6 @@
 from robosuite import load_controller_config
-from robosuite_env.controllers.expert_basketball import \
-    get_expert_trajectory as basketball_expert
-from robosuite_env.controllers.expert_nut_assembly import \
-    get_expert_trajectory as nut_expert
-from robosuite_env.controllers.expert_pick_place import \
-    get_expert_trajectory as place_expert 
-from robosuite_env.controllers.expert_block_stacking import \
-    get_expert_trajectory as stack_expert
-from robosuite_env.controllers.expert_drawer import \
-    get_expert_trajectory as draw_expert
-from robosuite_env.controllers.expert_button import \
-    get_expert_trajectory as press_expert
-from robosuite_env.controllers.expert_door import \
-    get_expert_trajectory as door_expert
-
+from robosuite_env.controllers.new_controllers.expert_pick_place import \
+    get_expert_trajectory as place_expert
 
 import functools
 import os
@@ -27,66 +14,18 @@ from multiprocessing import Pool, cpu_count
 # To be crystal clear: each constructed "Environment" is defined by both (task_name, robot_name), e.g. 'PandaBasketball'
 # but each task_name may have differnt sub-task ids: e.g. Basketball-task_00 is throwing the white ball into hoop #1
 TASK_ENV_MAP = {
-    'door':     {
-        'n_task': 4,
-        'env_fn': door_expert,
-        'panda':  'PandaDoor',
-        'sawyer': 'SawyerDoor',
-        },
-    'drawer': {
-        'n_task':   8, 
-        'env_fn':   draw_expert,
-        'panda':    'PandaDrawer',
-        'sawyer':   'SawyerDrawer',
-        },
-    'basketball': {
-        'n_task':   12, 
-        'env_fn':   basketball_expert,
-        'panda':    'PandaBasketball',
-        'sawyer':   'SawyerBasketball',
-        },
-    'nut_assembly':  {
-        'n_task':   9, 
-        'env_fn':   nut_expert,
-        'panda':    'PandaNutAssemblyDistractor',
-        'sawyer':   'SawyerNutAssemblyDistractor',
-        },
-    'stack_block': {
-        'n_task':   6, 
-        'env_fn':   stack_expert,
-        'panda':    'PandaBlockStacking',
-        'sawyer':   'SawyerBlockStacking',
-        },
     'pick_place': {
         'n_task':   16, 
         'env_fn':   place_expert,
         'panda':    'Panda_PickPlaceDistractor',
         'sawyer':   'Sawyer_PickPlaceDistractor',
-        },
-    'button': {
-        'n_task':   6, 
-        'env_fn':   press_expert,
-        'panda':    'PandaButton',
-        'sawyer':   'SawyerButton',
-        },
-    'stack_new_color': {
-        'n_task':   6, 
-        'env_fn':   stack_expert,
-        'panda':    'PandaBlockStacking',
-        'sawyer':   'SawyerBlockStacking',
-        },
-    'stack_new_shape': {
-        'n_task':   6, 
-        'env_fn':   stack_expert,
-        'panda':    'PandaBlockStacking',
-        'sawyer':   'SawyerBlockStacking',
-        },
+        'ur5e':     'UR5e_PickPlaceDistractor',
+        }
 }
     
-ROBOT_NAMES = ['panda', 'sawyer']
+ROBOT_NAMES = ['panda', 'sawyer', 'ur5e']
 
-def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camera_obs=True, seeds=None, n_per_group=1, depth=False, renderer=False, \
-    heights=100, widths=200, gpu_count=1, color=False, shape=False):
+def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camera_obs=True, seeds=None, n_per_group=1, ctrl_config='IK_POSE', renderer=False, gpu_count=1, color=False, shape=False):
     if isinstance(N, int):
         N = [N]
     for n in N:
@@ -94,20 +33,23 @@ def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camer
         task = int((n % (n_tasks * n_per_group)) // n_per_group)
         seed = None if seeds is None else seeds[n]
         env_seed = seeds[n - n % n_per_group] if seeds is not None and env_seed else None
-        config = load_controller_config(default_controller='IK_POSE')
+        if ctrl_config=='IK_POSE' or ctrl_config=='OSC_POSE':
+            config = load_controller_config(default_controller=ctrl_config)
+        else:
+            config = load_controller_config(custom_fpath=ctrl_config)
         gpu_id = int(n % gpu_count)
         if color or shape:
             assert 'BlockStacking' in env_type, env_type 
             traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-            seed=seed, env_seed=env_seed, depth=depth, widths=widths, heights=heights, gpu_id=gpu_id, color=color,shape=shape)
+            seed=seed, env_seed=env_seed, gpu_id=gpu_id, color=color,shape=shape)
         else:
             traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, depth=depth, widths=widths, heights=heights, gpu_id=gpu_id)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id)
             if len(traj) < 5: # try again
                 traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, depth=depth, widths=widths, heights=heights, gpu_id=gpu_id)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id)
             
-         # let's make a new folder structure for easier dataloader construct: 
+        # let's make a new folder structure for easier dataloader construct: 
         # env_type/task_id/traj_idx.pkl, where idxes start from 0 within each sub-task
         group_count = n // (n_tasks * n_per_group)
         traj_idx = n % n_per_group + n_per_group * group_count 
@@ -128,6 +70,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('save_dir', default='./', help='Folder to save rollouts')
     parser.add_argument('--num_workers', default=cpu_count(), type=int, help='Number of collection workers (default=n_cores)')
+    parser.add_argument('--ctrl_config', type=str, help="Path to controller configuration file")
     parser.add_argument('--N', default=10, type=int, help="Number of trajectories to collect")
     parser.add_argument('--per_task_group', default=100, type=int, help="Number of trajectories of same task in row")
     # NOTE(Mandi): these are new:
@@ -141,14 +84,20 @@ if __name__ == '__main__':
     parser.add_argument('--n_env', default=None, type=int, help="Number of environments to collect from")
     parser.add_argument('--n_tasks', default=12, type=int, help="Number of tasks in environment")
     parser.add_argument('--give_env_seed', action='store_true', help="Maintain seperate consistent environment sampling seed (for multi obj envs)")
-    parser.add_argument('--depth', action='store_true', help="Use this flag to collect depth observations")
-    parser.add_argument('--heights', default=200, type=int, help="Render image height")
-    parser.add_argument('--widths', default=200, type=int, help="Render image width")
     # for blockstacking only:
     parser.add_argument('--color', action='store_true')
     parser.add_argument('--shape', action='store_true')
 
+    parser.add_argument('--debugger', action='store_true')
+
     args = parser.parse_args()
+    
+    if args.debugger:  
+        import debugpy
+        debugpy.listen(('0.0.0.0', 5678))
+        print("Waiting for debugger attach")
+        debugpy.wait_for_client()
+
     assert args.num_workers > 0, "num_workers must be positive!"
 
     if args.random_seed:
@@ -165,8 +114,8 @@ if __name__ == '__main__':
     assert (args.task_name in args.save_dir and args.robot in args.save_dir), args.save_dir 
     
     assert args.task_name in TASK_ENV_MAP.keys(), 'Got unsupported task. name {}'.format(args.task_name)
-    print("Collecting {} trajs for {}, image height={}, width={}, using {} subtasks, collecting depth observation? {}".format(
-        args.N, args.task_name, args.heights, args.widths, args.n_tasks, args.depth))
+    print("Collecting {} trajs for {}, using {} subtasks".format(
+        args.N, args.task_name, args.n_tasks))
     print('Saving path: ', args.save_dir)
     
 
@@ -191,8 +140,6 @@ if __name__ == '__main__':
             'task':     args.task_name,
             'env_type': env_name,
             'n_tasks':  args.n_tasks,
-            'heights':  args.heights,
-            'widths':   args.widths,
             'task_group_size': args.per_task_group,
         }, 
         open( join(args.save_dir, 'info.json'), 'w'))
@@ -205,8 +152,9 @@ if __name__ == '__main__':
             N=list(range(args.N)),
             env_type=env_name, env_func=env_fn, save_dir=args.save_dir, n_tasks=args.n_tasks, \
             env_seed=args.give_env_seed, camera_obs=args.collect_cam, seeds=seeds, n_per_group=args.per_task_group, \
-            depth=args.depth, renderer=args.renderer, \
-            heights=args.heights, widths=args.widths, gpu_count=count, \
+            renderer=args.renderer, \
+            gpu_count=count, \
+            ctrl_config=args.ctrl_config, \
             color=args.color, shape=args.shape)
     else:
         assert not args.renderer, "can't display rendering when using multiple workers"
@@ -216,8 +164,9 @@ if __name__ == '__main__':
                 save_rollout, 
                 env_type=env_name, env_func=env_fn, save_dir=args.save_dir, n_tasks=args.n_tasks, \
                 env_seed=args.give_env_seed, camera_obs=args.collect_cam, seeds=seeds, n_per_group=args.per_task_group, \
-                depth=args.depth, renderer=args.renderer, \
-                heights=args.heights, widths=args.widths, gpu_count=count, \
+                renderer=args.renderer, \
+                gpu_count=count, \
+                ctrl_config=args.ctrl_config, \
                 color=args.color, shape=args.shape)
 
             p.map(f, range(args.N))
