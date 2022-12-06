@@ -19,6 +19,7 @@ import robosuite.utils.transform_utils as T
 import robosuite_env.utils as utils
 from robosuite_env import get_env
 
+import copy
 import logging
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
 pick_place_logger = logging.getLogger(name="PickPlaceLogger")
@@ -85,7 +86,7 @@ class PickPlaceController:
         self._t = 0
         self._intermediate_reached = False
         self._hover_delta = 0.20
-
+        self._obj_thr = 0.10
         dist_panda = {'milk': 0.018, 'can': 0.018, 'cereal': 0.018, 'bread': 0.018}
         dist_sawyer = {'milk': 0.018, 'can': 0.018, 'cereal': 0.018, 'bread': 0.018}
         dist_ur5e = {'milk': 0.03, 'can': 0.03, 'cereal': 0.03, 'bread': 0.03}
@@ -127,6 +128,7 @@ class PickPlaceController:
             self._start_grasp = -1
             self._finish_grasp = False
             self._target_quat = self._calculate_quat(obs)
+            self._move_up = False
         
         # Phase 1
         if self._start_grasp < 0:
@@ -160,7 +162,15 @@ class PickPlaceController:
         # Phase 3
         elif np.linalg.norm(
                 self._target_loc - obs[self._obs_name]) > self._final_thresh and not self._intermediate_reached:
-            target = self._target_loc
+            if not self._move_up:
+                self._init_obj_pos = obs['{}_pos'.format(self._object_name)]
+                self._move_up = True
+            # check the current object height
+            if (abs(self._init_obj_pos[2] - obs['{}_pos'.format(self._object_name)][2]) < self._obj_thr):
+                # target location is the current gripper position + security threshold
+                target = obs['eef_pos'] + [0, 0, self._obj_thr]
+            else:
+                target = self._target_loc 
             # moving towards the goal bin
             eef_pose = self._get_target_pose(target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [1]))
@@ -292,7 +302,7 @@ if __name__ == '__main__':
     current_dir = os.path.dirname(os.path.abspath(__file__))
     controller_config_path = os.path.join(current_dir,"../config/osc_pose.json")
     controller_config = load_controller_config(custom_fpath=controller_config_path)
-    for i in range(8, 16):
+    for i in range(0, 16):
         traj = get_expert_trajectory('UR5e_PickPlaceDistractor', 
                                     controller_type=controller_config,
                                     renderer=True, 
