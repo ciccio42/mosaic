@@ -197,7 +197,6 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     # reassign the gpu id
     visible_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
     gpu_id = int(visible_ids[gpu_id])
-
     seed = seed if seed is not None else random.getrandbits(32)
     env_seed = seed if env_seed is None else env_seed
     seed_offset = sum([int(a) for a in bytes(env_type, 'ascii')])

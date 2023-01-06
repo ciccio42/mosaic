@@ -25,7 +25,7 @@ TASK_ENV_MAP = {
     
 ROBOT_NAMES = ['panda', 'sawyer', 'ur5e']
 
-def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camera_obs=True, seeds=None, n_per_group=1, ctrl_config='IK_POSE', renderer=False, gpu_count=1, color=False, shape=False):
+def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camera_obs=True, seeds=None, n_per_group=1, ctrl_config='IK_POSE', renderer=False, gpu_count=1, gpu_id_indx=-1, color=False, shape=False):
     if isinstance(N, int):
         N = [N]
     for n in N:
@@ -37,17 +37,18 @@ def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camer
             config = load_controller_config(default_controller=ctrl_config)
         else:
             config = load_controller_config(custom_fpath=ctrl_config)
-        gpu_id = int(n % gpu_count)
+        if gpu_id_indx == -1:
+            gpu_id_indx = int(n % gpu_count)
         if color or shape:
             assert 'BlockStacking' in env_type, env_type 
             traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-            seed=seed, env_seed=env_seed, gpu_id=gpu_id, color=color,shape=shape)
+            seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx, color=color,shape=shape)
         else:
             traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, gpu_id=gpu_id)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx)
             if len(traj) < 5: # try again
                 traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, gpu_id=gpu_id)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx)
             
         # let's make a new folder structure for easier dataloader construct: 
         # env_type/task_id/traj_idx.pkl, where idxes start from 0 within each sub-task
@@ -83,6 +84,7 @@ if __name__ == '__main__':
     parser.add_argument('--random_seed', action='store_true', help="If flag then will collect data from random envs")
     parser.add_argument('--n_env', default=None, type=int, help="Number of environments to collect from")
     parser.add_argument('--n_tasks', default=12, type=int, help="Number of tasks in environment")
+    parser.add_argument('--gpu_id_indx', default=-1, type=int, help="GPU to use for rendering")
     parser.add_argument('--give_env_seed', action='store_true', help="Maintain seperate consistent environment sampling seed (for multi obj envs)")
     # for blockstacking only:
     parser.add_argument('--color', action='store_true')
@@ -154,6 +156,7 @@ if __name__ == '__main__':
             env_seed=args.give_env_seed, camera_obs=args.collect_cam, seeds=seeds, n_per_group=args.per_task_group, \
             renderer=args.renderer, \
             gpu_count=count, \
+            gpu_id_indx=args.gpu_id_indx,    
             ctrl_config=args.ctrl_config, \
             color=args.color, shape=args.shape)
     else:
@@ -166,7 +169,9 @@ if __name__ == '__main__':
                 env_seed=args.give_env_seed, camera_obs=args.collect_cam, seeds=seeds, n_per_group=args.per_task_group, \
                 renderer=args.renderer, \
                 gpu_count=count, \
+                gpu_id=args.gpu_id,  
                 ctrl_config=args.ctrl_config, \
                 color=args.color, shape=args.shape)
 
             p.map(f, range(args.N))
+    
