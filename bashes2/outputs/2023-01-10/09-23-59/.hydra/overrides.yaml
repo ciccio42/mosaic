@@ -1,0 +1,11 @@
+- policy=${mosaic}
+- single_task=pick_place
+- exp_name=1Task-StackBlock
+- bsize=30
+- actions.n_mixtures=2
+- actions.out_dim=64
+- attn.attn_ff=128
+- simclr.mul_intm=0
+- simclr.compressor_dim=128
+- simclr.hidden_dim=256
+- epochs=20

@@ -50,6 +50,8 @@ class MultiTaskPairedDataset(Dataset):
         allow_train_skip=False,
         use_strong_augs=False,
         aux_pose=False,
+        agent_name="panda",
+        demo_name="ur5e",
         **params):
         """
         Args:
@@ -96,14 +98,15 @@ class MultiTaskPairedDataset(Dataset):
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
+            print("---- Agent name {} ----\n---- Demo name {} ".format(agent_name, demo_name))
             if mode == 'train':
                 print("Loading task [{:<9}] saved on date {}".format(name, date))
             if date is None:
-                agent_dir       = join(root_dir, name, 'panda_{}'.format(name))
-                demo_dir        = join(root_dir, name, 'sawyer_{}'.format(name))
+                agent_dir       = join(root_dir, name, '{}_{}'.format(agent_name, name))
+                demo_dir        = join(root_dir, name, '{}_{}'.format(demo_name, name))
             else:
-                agent_dir       = join(root_dir, name, '{}_panda_{}'.format(date, name))
-                demo_dir        = join(root_dir, name, '{}_sawyer_{}'.format(date, name))
+                agent_dir       = join(root_dir, name, '{}_{}_{}'.format(agent_name, date, name))
+                demo_dir        = join(root_dir, name, '{}_{}_{}'.format(demo_name, date, name))
             self.subtask_to_idx[name] = defaultdict(list)
             for _id in range(spec.get('n_tasks')):
                 if _id in spec.get('skip_ids', []):

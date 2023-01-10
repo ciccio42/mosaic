@@ -1,4 +1,7 @@
-save_path:      /home/mandi/mosaic/log_data
+# General parameters
+# Path to dataset
+EXPERT_DATA:    /mnt/sdc1/frosa/multitask_dataset/mosaic_multitask_dataset
+save_path:      /user/frosa/robotic/multitask_lfd/training_log
 save_freq:      1000
 log_freq:       1000
 val_freq:       1000 
@@ -6,11 +9,12 @@ print_freq:     1000
 save_optim:     False
 resume:         False
 resume_path:    None
-device:         -1
+device:         3
 exp_name:       -1
 epochs:         10
 bsize:          30
 vsize:          ${bsize} # optionally, set to a different batchsize for validation loader
+
 # imitation loss multipliers
 inv_mul:        1
 bc_mul:         1
@@ -25,6 +29,7 @@ rep_muls:
   simclr_intm:        ${simclr.mul_intm}
 
 wandb_log: False 
+# training configurations
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
@@ -47,12 +52,13 @@ tasks:       ???
 single_task: False 
 exclude_task: False 
 use_all_tasks: False 
+# number of trajectory of the same task 
 set_same_n:   -1 
+# number of trajectory for sub-task
 limit_num_traj: -1
 limit_num_demo: -1
 defaults:
   - tasks_cfgs:  7_tasks
-EXPERT_DATA:    '/home/mandi/mosaic_multitask_dataset' 
 
 # dataset/loader/samplers
 loader_workers:     10 
@@ -72,8 +78,8 @@ dataset_cfg:
   height:           100
   width:            180
   split:            [0.9, 0.1]
-  demo_T:           4
-  obs_T:            7
+  demo_T:           4 # number of timestamps for demonstrator
+  obs_T:            7 # number of timestamps for learner
   data_augs:        ${augs}
   non_sequential:   False
   crop_twice:       True
@@ -81,7 +87,11 @@ dataset_cfg:
   allow_val_skip:   ${val_skip}
   allow_train_skip: ${train_skip}
   use_strong_augs:  True 
-
+  # name of the agent (learner)
+  agent_name: ur5e
+  # name of the demonstrator (teacher)
+  demo_name: ur5e
+  
 augs:
   strong_jitter:     0.01    
   weak_jitter:       0.01
@@ -126,6 +136,7 @@ byol:
 policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}'
 
 mosaic:
+  # name of the module to use
   _target_:           mosaic.models.mt_rep.VideoImitation 
   latent_dim:         40
   sdim:               9

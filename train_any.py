@@ -61,6 +61,7 @@ class Trainer:
             run = wandb.init(project='mosaic', name=self.config.exp_name, config=wandb_config)
  
     def train(self, model, weights_fn=None, save_fn=None, optim_weights=None): 
+        
         self._train_loader, self._val_loader = make_data_loaders(self.config, self.train_cfg.dataset)
         # wrap model in DataParallel if needed and transfer to correct device
         print('Training stage \n Found {} GPU devices \n'.format(self.device_count))
@@ -291,7 +292,7 @@ class Workspace(object):
     config_name="config.yaml")
 def main(cfg): 
     from train_any import Workspace as W
-    all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.new_pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
+    all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
     
     if cfg.single_task:
         cfg.tasks = [tsk for tsk in all_tasks_cfgs if tsk.name == cfg.single_task]
@@ -328,4 +329,8 @@ def main(cfg):
     workspace.run()
 
 if __name__ == "__main__":
+    import debugpy
+    debugpy.listen(('0.0.0.0', 5678))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
     main()
