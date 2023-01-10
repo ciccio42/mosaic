@@ -42,8 +42,8 @@ button:
   traj_per_subtask:  100
   demo_per_subtask:  100 
 
-new_pick_place:
-  name:              'new_pick_place'
+pick_place:
+  name:              'pick_place'
   n_tasks:           16
   crop:              [0,0,0,0]  
   n_per_task:        2
