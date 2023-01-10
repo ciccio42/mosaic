@@ -16,17 +16,21 @@ from robosuite.utils import RandomizationError
 import torch
 import os
 import mujoco_py
+import robosuite.utils.transform_utils as T
 # in case rebuild is needed to use GPU render: sudo mkdir -p /usr/lib/nvidia-000
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-000
 # pip uninstall mujoco_py; pip install mujoco_py 
 
+import copy
+import logging
+logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.INFO)
+nut_assembly_logger = logging.getLogger(name="NutAssemblyLogger")
+
 def _clip_delta(delta, max_step=0.015):
     norm_delta = np.linalg.norm(delta)
-
     if norm_delta < max_step:
         return delta
     return delta / norm_delta * max_step
-
 
 class NutAssemblyController:
     def __init__(self, env, ranges, tries=0):
@@ -36,11 +40,14 @@ class NutAssemblyController:
         self.reset()
         self.ranges = ranges
 
-    def _calculate_quat(self, angle):
-        if "Sawyer" in self._env.robot_names:
-            new_rot = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
-            return Quaternion(matrix=self._base_rot.dot(new_rot))
-        return self._base_quat
+    def _calculate_quat(self, obs):
+        # Compute target quaternion that defines the final desired gripper orientation
+        # 1. Obtain the orientation of the object wrt to world
+        obj_quat = obs['{}_quat'.format(self._object_name)]
+        obj_rot = T.quat2mat(obj_quat)
+        # 2. compute the new gripper orientation with respect to the gripper
+        world_ee_rot = np.matmul(obj_rot, self._target_gripper_wrt_obj_rot)
+        return Quaternion(matrix=world_ee_rot)
 
     def get_handle_loc(self):
         if self._env.nut_id == 0:
@@ -65,34 +72,58 @@ class NutAssemblyController:
     def reset(self):
         self._object_name = self._env.nuts[self._env.nut_id].name
         if self._env.default_peg == 0:
-            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg1_body_id]) + [0, 0, 0.115]
+            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg1_body_id]) + [0, 0, 0.2]
+            self._target_peg_base = np.array(self._env.sim.data.body_xpos[self._env.peg1_body_id])
         elif self._env.default_peg == 1:
-            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg2_body_id]) + [0, 0, 0.115]
+            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg2_body_id]) + [0, 0, 0.2]
+            self._target_peg_base = np.array(self._env.sim.data.body_xpos[self._env.peg2_body_id])
         else:
-            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg3_body_id]) + [0, 0, 0.115]
+            self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.peg3_body_id]) + [0, 0, 0.2]
+            self._target_peg_base = np.array(self._env.sim.data.body_xpos[self._env.peg3_body_id])
         self._clearance = 0.05
 
         if "Sawyer" in self._env.robot_names:
             self._obs_name = 'eef_pos'
-            self._default_speed = 0.13
+            self._default_speed = 0.01
             self._final_thresh = 1e-2
-            self._base_rot = np.array([[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=self._base_rot)
+            # define the target gripper orientation with respect to the object
+            self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
         elif "Panda" in self._env.robot_names:
             self._obs_name = 'eef_pos'
-            self._default_speed = 0.13
+            self._default_speed = 0.02
+            self._final_thresh = 1e-2            
+            # define the target gripper orientation with respect to the object
+            self._target_gripper_wrt_obj_rot = np.array([[0, -1, 0.], [-1, 0, 0.], [0., 0., -1.]])
+        elif "UR5e" in self._env.robot_names:
+            self._obs_name = 'eef_pos'
+            self._default_speed = 0.02
             self._final_thresh = 1e-2
-            self._base_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=self._base_rot)
+            # define the target gripper orientation with respect to the object
+            self._target_gripper_wrt_obj_rot = np.array([[-1, 0, 0.], [0, 1, 0.], [0., 0., -1.]])
         else:
             raise NotImplementedError
+
+        # define the initial orientation of the gripper site
+        self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
+        nut_assembly_logger.info(f"Starting position:\n{self._env.sim.data.site_xpos[self._env.robots[0].eef_site_id]}")
+        nut_assembly_logger.info(f"Base rot:\n{np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3))}")
 
         self._t = 0
         self._intermediate_reached = False
         self._hover_delta = 0.15
 
+        if "Panda" in self._env.robot_names:
+            # gripper depth defines the distance between the TCP and the edge of the gripper
+            self._gripper_depth = 0.01
+        elif "Sawyer" in self._env.robot_names:
+            # gripper depth defines the distance between the TCP and the edge of the gripper
+            self._gripper_depth = 0.038/2
+        elif "UR5e" in self._env.robot_names:
+            # gripper depth defines the distance between the TCP and the edge of the gripper
+            self._gripper_depth = 0.038/2
+
     def _object_in_hand(self, obs):
-        if np.linalg.norm(self.get_handle_loc() - obs[self._obs_name]) < 0.02:
+        if np.linalg.norm(self.get_handle_loc() - obs[self._obs_name]) < self._gripper_depth:
             return True
         elif self._env._check_grasp(gripper=self._env.robots[0].gripper, object_geoms=[g for g in self._env.nuts[self._env.nut_id].contact_geoms]):
             return True
@@ -104,29 +135,24 @@ class NutAssemblyController:
 
         delta_pos = _clip_delta(delta_pos, max_step)
 
-        if self.ranges.shape[0] == 7:
-            aa = np.concatenate(([quat.angle / np.pi], quat.axis))
-            if aa[0] < 0:
-                aa[0] += 1
-        else:
-            quat = np.array([quat.x, quat.y, quat.z, quat.w])
-            aa = quat2axisangle(quat)
-        return normalize_action(np.concatenate((delta_pos + base_pos, aa)), self.ranges)
+        delta_pos = _clip_delta(delta_pos, max_step)
+        quat = np.array([quat.x, quat.y, quat.z, quat.w])
+        aa = quat2axisangle(quat)
+        
+        # absolute in world frame
+        return np.concatenate((delta_pos + base_pos, aa))
 
-    def act(self, obs):
+
+    def act(self, obs, prev_status=None):
         status = 'start'
         if self._t == 0:
             self._start_grasp = -1
             self._finish_grasp = False
+            self._target_quat = self._calculate_quat(obs)
 
-            y = -(self.get_handle_loc()[1] - obs[self._obs_name][1])
-            x = self.get_handle_loc()[0] - obs[self._obs_name][0]
-
-            angle = np.arctan2(y, x)
-            self._target_quat = self._calculate_quat(angle)
-
-        if self._start_grasp < 0 and self._t < 15:
-            if np.linalg.norm(self.get_handle_loc() - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol or self._t == 14:
+        # Phase 1
+        if self._start_grasp < 0 :
+            if np.linalg.norm(self.get_handle_loc()[:2] - obs[self._obs_name][:2]) < self._g_tol:
                 self._start_grasp = self._t
 
             quat_t = Quaternion.slerp(self._base_quat, self._target_quat, min(1, float(self._t) / 5))
@@ -135,9 +161,10 @@ class NutAssemblyController:
                 obs['eef_pos'], quat_t)
             action = np.concatenate((eef_pose, [-1]))
             status = 'prepare_grasp'
-
-        elif self._t < self._start_grasp + 45 and not self._finish_grasp:
+        # Phase 2
+        elif self._start_grasp > 0  and not self._finish_grasp:
             if not self._object_in_hand(obs):
+                # the object is not in the hand, approaching the object
                 eef_pose = self._get_target_pose(
                     self.get_handle_loc() - obs[self._obs_name] - [0, 0, self._clearance],
                     obs['eef_pos'], self._target_quat)
@@ -145,24 +172,32 @@ class NutAssemblyController:
                 self.object_pos = obs['{}_pos'.format(self._object_name)]
                 status = 'reaching_obj'
             else:
-                eef_pose = self._get_target_pose(self.object_pos - obs[self._obs_name] + [0, 0, self._hover_delta],
-                                                 obs['eef_pos'], self._target_quat)
+                # the object is in the hand, close the gripper and start the new phase
+                eef_pose = self._get_target_pose(self.object_pos - obs[self._obs_name], obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [1]))
-                if np.linalg.norm(self.object_pos - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol:
-                    self._finish_grasp = True
+                #if np.linalg.norm(self.object_pos - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol:
+                self._finish_grasp = True
                 status = 'obj_in_hand'
-
+        # Phase 3
         elif np.linalg.norm(
-                self._target_loc - self.get_center_loc()) > self._final_thresh and self._object_in_hand(obs):
+                self._target_loc - self.get_center_loc()) > self._final_thresh and self._object_in_hand(obs) and prev_status!="assembling":
             target = self._target_loc
             eef_pose = self._get_target_pose(target - self.get_center_loc(), obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [1]))
             status = 'moving'
-        else:
-            eef_pose = self._get_target_pose(np.zeros(3), obs['eef_pos'], self._target_quat)
-            action = np.concatenate((eef_pose, [-1]))
+        # Phase 4
+        # check whether the nut is inserted
+        elif (self.get_center_loc()[2]-self._target_peg_base[2]) > 0.02:
+            eef_pose = self._get_target_pose([0, 0, self._target_peg_base[2]-obs[self._obs_name][2]], 
+                                            obs['eef_pos'], self._target_quat)
+            action = np.concatenate((eef_pose, [1]))
             status = 'assembling'
+        else:
+            eef_pose = self._get_target_pose(0, obs['eef_pos'], self._target_quat)
+            action = np.concatenate((eef_pose, [-1]))
+            status = 'releasing'
         self._t += 1
+        nut_assembly_logger.info(f"Status {status}")
         return action, status
 
     def disconnect(self):
@@ -179,10 +214,13 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     env_seed = seed if env_seed is None else env_seed
     seed_offset = sum([int(a) for a in bytes(env_type, 'ascii')])
     np.random.seed(env_seed)
+
     if 'Sawyer' in env_type:
-        action_ranges = np.array([[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-5, 5], [-5, 5], [-5, 5]])
-    else:
-        action_ranges = np.array([[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]])
+        action_ranges = np.array([[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
+    elif 'UR5e' in env_type:
+        action_ranges = np.array([[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
+    elif 'Panda' in env_type:
+        action_ranges = np.array([[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [0.85, 1.08], [-1, 1], [-1, 1], [-1, 1]])
 
     success, use_object = False, None
     if task is not None:
@@ -246,8 +284,9 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         env.sim.set_state_from_flattened(mj_state)
         env.sim.forward()
         traj.append(obs, raw_state=mj_state, info={'status': 'start'})
-        for t in range(int(env.horizon // 10)):
-            action, status = controller.act(obs)
+        status = "Start"
+        for t in range(int(env.horizon)):
+            action, status = controller.act(obs, status)
             obs, reward, done, info = env.step(action)
             assert 'status' not in info.keys(), "Don't overwrite information returned from environment. "
             info['status'] = status
@@ -273,6 +312,16 @@ if __name__ == '__main__':
     debugpy.listen(('0.0.0.0', 5678))
     print("Waiting for debugger attach")
     debugpy.wait_for_client()
-    config = load_controller_config(default_controller='IK_POSE')
+    
+    # Load configuration files
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    controller_config_path = os.path.join(current_dir,"../config/osc_pose.json")
+    controller_config = load_controller_config(custom_fpath=controller_config_path)
+    
     for i in range(9):
-        traj = get_expert_trajectory('Panda_NutAssemblyDistractor', config, renderer=True, camera_obs=False, task=i, render_camera='camera_front')
+        traj = get_expert_trajectory('UR5e_NutAssemblyDistractor', 
+                                    controller_type=controller_config,
+                                    renderer=True, 
+                                    camera_obs=False, 
+                                    task=i, 
+                                    render_camera='camera_front')

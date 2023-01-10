@@ -155,7 +155,7 @@ class PickPlaceController:
                 status = 'reaching_obj'
             else:
                 # the object is in the hand, close the gripper and start the new phase
-                eef_pose = self._get_target_pose(self.object_pos - obs[self._obs_name] + [0, 0, self._hover_delta], obs['eef_pos'], self._target_quat)
+                eef_pose = self._get_target_pose(self.object_pos - obs[self._obs_name], obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [1]))
                 self._finish_grasp = True
                 status = 'obj_in_hand'

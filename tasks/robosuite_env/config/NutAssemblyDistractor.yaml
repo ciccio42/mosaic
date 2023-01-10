@@ -14,20 +14,21 @@ robot_offset: [-0.5305, 0, 0.800]
 table_full_size: [0.85, 0.85, 0.05]
 
 # Table offset
-table_offset: [0, 0, 0.70]
+table_offset: [0, 0, 0.70] # table height
 
 # Object y ranges
 y_ranges: [[-0.30, 0.30]]
 x_range: [[-0.0, 0.10]]
+
 # Camera names
 camera_names: ['camera_front', 'camera_lateral_left','camera_lateral_right', 'robot0_eye_in_hand']
 
 # Pegs position
 peg_positions:
   {
-    peg1: [0.35, 0.2, 0.85],
-    peg2: [0.35, 0.0, 0.85],
-    peg3: [0.35, -0.2, 0.85],
+    peg1: [0.25, 0.2, 0.75],
+    peg2: [0.25, 0.0, 0.75],
+    peg3: [0.25, -0.2, 0.75],
   }
 
 camera_poses:

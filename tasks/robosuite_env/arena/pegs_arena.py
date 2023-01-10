@@ -29,7 +29,9 @@ class PegsArena(TableArena):
         # Get references to peg bodies
         self.peg1_body = self.worldbody.find("./body[@name='peg1']")
         self.peg1_body.set("pos",array_to_string(peg_positions['peg1']))
+
         self.peg2_body = self.worldbody.find("./body[@name='peg2']")
         self.peg2_body.set("pos",array_to_string(peg_positions['peg2']))
+        
         self.peg3_body = self.worldbody.find("./body[@name='peg3']")
         self.peg3_body.set("pos",array_to_string(peg_positions['peg3']))

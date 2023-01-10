@@ -16,6 +16,9 @@ def get_env(env_name, ranges, **kwargs):
     elif env_name == 'Sawyer_NutAssemblyDistractor':
         from robosuite_env.tasks.nut_assembly import SawyerNutAssemblyDistractor
         env = SawyerNutAssemblyDistractor
+    elif env_name == 'UR5e_NutAssemblyDistractor':
+        from robosuite_env.tasks.nut_assembly import UR5eNutAssemblyDistractor
+        env = UR5eNutAssemblyDistractor
     elif env_name == 'Panda_BlockStacking':
         from robosuite_env.tasks.stack import PandaBlockStacking
         env = PandaBlockStacking

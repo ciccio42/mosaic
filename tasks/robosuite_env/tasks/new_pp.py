@@ -134,7 +134,8 @@ class PickPlace(SingleArmEnv):
             camera_gripper=None,
             task_id = 0,
             object_type=None,
-            y_ranges=[[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+            y_ranges=[[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]],
+            env_conf=None
     ):
         # settings for table top
         self.table_full_size = table_full_size

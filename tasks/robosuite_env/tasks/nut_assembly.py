@@ -541,6 +541,19 @@ class SawyerNutAssemblyDistractor(NutAssembly):
         obj = items[obj] if isinstance(obj, int) else obj
         super().__init__(robots=['Sawyer'], single_object_mode=2, nut_type=obj, no_clear=True, **kwargs)
 
+class UR5eNutAssemblyDistractor(NutAssembly):
+    """
+    Easier version of task - place one object into its bin.
+    A new object is sampled on every reset.
+    """
+
+    def __init__(self, force_object=None, **kwargs):
+        assert "single_object_mode" not in kwargs, "invalid set of arguments"
+        items = ['nut0', 'nut1', 'nut2']
+        obj = np.random.choice(items) if force_object is None else force_object
+        obj = items[obj] if isinstance(obj, int) else obj
+        super().__init__(robots=['UR5e'], single_object_mode=2, nut_type=obj, no_clear=True, **kwargs)
+
 class PandaNutAssemblyDistractor(NutAssembly):
     """
     Easier version of task - place one object into its bin.
