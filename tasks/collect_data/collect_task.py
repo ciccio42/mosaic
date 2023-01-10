@@ -1,7 +1,8 @@
 from robosuite import load_controller_config
 from robosuite_env.controllers.new_controllers.expert_pick_place import \
     get_expert_trajectory as place_expert
-
+from robosuite_env.controllers.new_controllers.expert_nut_assembly import \
+    get_expert_trajectory as nut_expert 
 import functools
 import os
 import pickle as pkl
@@ -20,7 +21,13 @@ TASK_ENV_MAP = {
         'panda':    'Panda_PickPlaceDistractor',
         'sawyer':   'Sawyer_PickPlaceDistractor',
         'ur5e':     'UR5e_PickPlaceDistractor',
-        }
+        },
+    'nut_assembly':  {
+        'n_task':   9, 
+        'env_fn':   nut_expert,
+        'panda':    'PandaNutAssemblyDistractor',
+        'sawyer':   'SawyerNutAssemblyDistractor',
+        },
 }
     
 ROBOT_NAMES = ['panda', 'sawyer', 'ur5e']

@@ -169,8 +169,7 @@ class NutAssemblyController:
         p.disconnect()
 
 
-def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False,
-                          seed=None, env_seed=None, depth=False, widths=200, heights=200, gpu_id=0, **kwargs):
+def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False, seed=None, env_seed=None, gpu_id=0, render_camera="frontview",**kwargs):
     # assert widths == 180, widths
     assert 'gpu' in str(mujoco_py.cymj), 'Make sure to render with GPU to make eval faster'
     # reassign the gpu id
@@ -194,10 +193,18 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     if ret_env:
         while True:
             try:
-                env = get_env(env_type, force_object=use_object, default_peg=peg_id, controller_configs=controller_type,
-                              has_renderer=renderer, has_offscreen_renderer=camera_obs,
-                              reward_shaping=False, use_camera_obs=camera_obs, camera_heights=heights, camera_widths=widths,
-                              camera_depths=depth, ranges=action_ranges, camera_names="agentview", render_gpu_device_id=gpu_id, **kwargs)
+                env = get_env(env_type, 
+                             force_object=use_object, 
+                             default_peg=peg_id, 
+                             controller_configs=controller_type,
+                             has_renderer=renderer, 
+                             has_offscreen_renderer=camera_obs,
+                              reward_shaping=False, 
+                              use_camera_obs=camera_obs,
+                              ranges=action_ranges, 
+                              render_camera=render_camera, 
+                              render_gpu_device_id=gpu_id, 
+                              **kwargs)
                 break
             except RandomizationError:
                 pass
@@ -206,11 +213,18 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     tries = 0
     while True:
         try:
-            env = get_env(env_type, force_object=use_object, default_peg=peg_id, controller_configs=controller_type,
-                          has_renderer=renderer, has_offscreen_renderer=camera_obs,
-                          reward_shaping=False, use_camera_obs=camera_obs, camera_heights=heights,
-                          camera_widths=widths, camera_depths=depth, ranges=action_ranges, 
-                          render_gpu_device_id=gpu_id, camera_names="agentview", **kwargs)
+            env = get_env(env_type, 
+                        force_object=use_object, 
+                        default_peg=peg_id, 
+                        controller_configs=controller_type,
+                        has_renderer=renderer, 
+                        has_offscreen_renderer=camera_obs,
+                        reward_shaping=False, 
+                        use_camera_obs=camera_obs,
+                        ranges=action_ranges, 
+                        render_camera=render_camera, 
+                        render_gpu_device_id=gpu_id, 
+                        **kwargs)
             break
         except RandomizationError:
             pass
@@ -255,6 +269,10 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
 
 
 if __name__ == '__main__':
+    import debugpy
+    debugpy.listen(('0.0.0.0', 5678))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
     config = load_controller_config(default_controller='IK_POSE')
     for i in range(9):
-        traj = get_expert_trajectory('PandaNutAssemblyDistractor', config, renderer=True, camera_obs=False, task=i, render_camera='agentview')
+        traj = get_expert_trajectory('Panda_NutAssemblyDistractor', config, renderer=True, camera_obs=False, task=i, render_camera='camera_front')

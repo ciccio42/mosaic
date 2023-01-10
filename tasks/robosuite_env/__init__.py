@@ -59,7 +59,8 @@ def get_env(env_name, ranges, **kwargs):
     task_name = env_name.split('_')[1]
     env_conf = utils.read_conf_file(task_name=task_name)
 
-    env = env(mount_types=env_conf['mount_types'],
+    env = env( 
+              mount_types=env_conf['mount_types'],
               gripper_types=env_conf['gripper_types'],
               table_full_size=env_conf['table_full_size'],
               table_offset=env_conf['table_offset'],
@@ -73,7 +74,9 @@ def get_env(env_name, ranges, **kwargs):
               camera_attribs=env_conf['camera_attribs'],
               camera_gripper=env_conf['camera_gripper'],
               y_ranges=env_conf['y_ranges'],
-              **kwargs)
+              env_conf=env_conf,
+              **kwargs
+              )
 
     if kwargs['controller_configs']['type'] == "IK_POSE":
         from robosuite_env.custom_ik_wrapper import CustomIKWrapper

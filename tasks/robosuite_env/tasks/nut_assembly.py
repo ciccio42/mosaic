@@ -20,21 +20,22 @@ class DefaultNutAssembly(SingleArmEnv):
         robots,
         env_configuration="default",
         controller_configs=None,
+        mount_types="default",
         gripper_types="default",
+        robot_offset=None,
         initialization_noise="default",
         table_full_size=(0.8, 0.8, 0.05),
         table_friction=(1, 0.005, 0.0001),
+        table_offset=(0, 0, 0.82),
         use_camera_obs=True,
         use_object_obs=True,
         reward_scale=1.0,
         reward_shaping=False,
         placement_initializer=None,
-        single_object_mode=0,
-        default_peg=None,
-        nut_type=None,
         has_renderer=False,
         has_offscreen_renderer=True,
         render_camera="frontview",
+        single_object_mode=0,
         render_collision_mesh=False,
         render_visual_mesh=True,
         render_gpu_device_id=-1,
@@ -46,6 +47,13 @@ class DefaultNutAssembly(SingleArmEnv):
         camera_heights=256,
         camera_widths=256,
         camera_depths=False,
+        camera_poses=None,
+        camera_attribs=None,
+        camera_gripper=None,
+        default_peg=None,
+        nut_type=None,
+        y_ranges=[[-0.30, 0.30]],
+        env_conf=None
     ):
         # task settings
         self.single_object_mode = single_object_mode
@@ -63,11 +71,15 @@ class DefaultNutAssembly(SingleArmEnv):
             )
             self.nut_id = self.nut_to_id[nut_type]  # use for convenient indexing
         self.obj_to_use = None
+        self.x_ranges = env_conf["x_range"]
+        self.y_ranges = y_ranges
+        self.peg_positions = env_conf["peg_positions"]
 
         # settings for table top
         self.table_full_size = table_full_size
         self.table_friction = table_friction
-        self.table_offset = np.array((0, 0, 0.82))
+        self.table_offset = np.array(table_offset)
+        self.robot_offset = robot_offset
 
         # reward configuration
         self.reward_scale = reward_scale
@@ -79,11 +91,16 @@ class DefaultNutAssembly(SingleArmEnv):
         # object placement initializer
         self.placement_initializer = placement_initializer
 
+        # camera poses and attributes
+        self.camera_poses = camera_poses
+        self.camera_attribs = camera_attribs
+        self.camera_gripper = camera_gripper
+
         super().__init__(
             robots=robots,
             env_configuration=env_configuration,
             controller_configs=controller_configs,
-            mount_types="default",
+            mount_types=mount_types,
             gripper_types=gripper_types,
             initialization_noise=initialization_noise,
             use_camera_obs=use_camera_obs,
@@ -240,7 +257,10 @@ class DefaultNutAssembly(SingleArmEnv):
         super()._load_model()
 
         # Adjust base pose accordingly
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        if self.robot_offset is None:
+            xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        else:
+            xpos = self.robot_offset
         self.robots[0].robot_model.set_base_xpos(xpos)
 
         # load model for table top workspace
@@ -248,7 +268,17 @@ class DefaultNutAssembly(SingleArmEnv):
             table_full_size=self.table_full_size,
             table_friction=self.table_friction,
             table_offset=self.table_offset,
+            peg_positions=self.peg_positions
         )
+
+
+        # add desired cameras
+        if self.camera_poses is not None:
+            for camera_name in self.camera_poses.keys():
+                mujoco_arena.set_camera(camera_name=camera_name, 
+                                        pos=self.camera_poses[camera_name][0],
+                                        quat=self.camera_poses[camera_name][1],
+                                        camera_attribs=self.camera_attribs)
 
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
@@ -284,8 +314,8 @@ class DefaultNutAssembly(SingleArmEnv):
             BoundarySampler(
                 name="NutSampler",
                 mujoco_objects=self.nuts,
-                x_range=[-0.13, -0.09],
-                y_range=[-0.30, 0.30],
+                x_range=self.x_ranges[0],
+                y_range=self.y_ranges[0],
                 rotation=[np.pi - 0.1, np.pi + 0.1],
                 rotation_axis='z',
                 ensure_object_boundary_in_range=False,
