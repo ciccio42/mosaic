@@ -105,8 +105,8 @@ class NutAssemblyController:
 
         # define the initial orientation of the gripper site
         self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
-        nut_assembly_logger.info(f"Starting position:\n{self._env.sim.data.site_xpos[self._env.robots[0].eef_site_id]}")
-        nut_assembly_logger.info(f"Base rot:\n{np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3))}")
+        nut_assembly_logger.debug(f"Starting position:\n{self._env.sim.data.site_xpos[self._env.robots[0].eef_site_id]}")
+        nut_assembly_logger.debug(f"Base rot:\n{np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3))}")
 
         self._t = 0
         self._intermediate_reached = False
