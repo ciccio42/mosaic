@@ -278,7 +278,6 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
                 env.render()
             mj_state = env.sim.get_state().flatten()
             traj.append(obs, reward, done, info, action, mj_state)
-
             if reward:
                 success = True
                 break

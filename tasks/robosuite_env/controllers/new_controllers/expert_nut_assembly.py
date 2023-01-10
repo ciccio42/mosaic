@@ -123,7 +123,7 @@ class NutAssemblyController:
             self._gripper_depth = 0.038/2
 
     def _object_in_hand(self, obs):
-        if np.linalg.norm(self.get_handle_loc() - obs[self._obs_name]) < self._gripper_depth:
+        if (self.get_handle_loc()[2] - obs[self._obs_name][2] > 0) and (self.get_handle_loc()[2] - obs[self._obs_name][2] <= self._gripper_depth):
             return True
         elif self._env._check_grasp(gripper=self._env.robots[0].gripper, object_geoms=[g for g in self._env.nuts[self._env.nut_id].contact_geoms]):
             return True
@@ -152,7 +152,7 @@ class NutAssemblyController:
 
         # Phase 1
         if self._start_grasp < 0 :
-            if np.linalg.norm(self.get_handle_loc()[:2] - obs[self._obs_name][:2]) < self._g_tol:
+            if (np.linalg.norm(self.get_handle_loc()[:2] - obs[self._obs_name][:2])) < self._g_tol:
                 self._start_grasp = self._t
 
             quat_t = Quaternion.slerp(self._base_quat, self._target_quat, min(1, float(self._t) / 5))
@@ -162,7 +162,7 @@ class NutAssemblyController:
             action = np.concatenate((eef_pose, [-1]))
             status = 'prepare_grasp'
         # Phase 2
-        elif self._start_grasp > 0  and not self._finish_grasp:
+        elif self._start_grasp >= 0  and not self._finish_grasp:
             if not self._object_in_hand(obs):
                 # the object is not in the hand, approaching the object
                 eef_pose = self._get_target_pose(
@@ -173,7 +173,7 @@ class NutAssemblyController:
                 status = 'reaching_obj'
             else:
                 # the object is in the hand, close the gripper and start the new phase
-                eef_pose = self._get_target_pose(self.object_pos - obs[self._obs_name], obs['eef_pos'], self._target_quat)
+                eef_pose = self._get_target_pose(self.get_handle_loc() - obs[self._obs_name], obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [1]))
                 #if np.linalg.norm(self.object_pos - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol:
                 self._finish_grasp = True
@@ -197,7 +197,7 @@ class NutAssemblyController:
             action = np.concatenate((eef_pose, [-1]))
             status = 'releasing'
         self._t += 1
-        nut_assembly_logger.info(f"Status {status}")
+        nut_assembly_logger.debug(f"Status {status}")
         return action, status
 
     def disconnect(self):
@@ -284,7 +284,7 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         env.sim.set_state_from_flattened(mj_state)
         env.sim.forward()
         traj.append(obs, raw_state=mj_state, info={'status': 'start'})
-        status = "Start"
+        status = "start"
         for t in range(int(env.horizon)):
             action, status = controller.act(obs, status)
             obs, reward, done, info = env.step(action)
@@ -294,7 +294,7 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
                 env.render()
             mj_state = env.sim.get_state().flatten()
             traj.append(obs, reward, done, info, action, mj_state)
-
+            #print(done)
             if reward:
                 success = True
                 break

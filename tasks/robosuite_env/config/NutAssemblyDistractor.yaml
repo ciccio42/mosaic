@@ -56,10 +56,10 @@ camera_attribs:
 camera_depths: true
 
 # Camera height
-camera_heights: 480
+camera_heights: 360
 
 # Camera width
-camera_widths: 720
+camera_widths: 640
 
 # Horizon
 horizon: 1000

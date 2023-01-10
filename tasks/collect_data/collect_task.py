@@ -25,8 +25,9 @@ TASK_ENV_MAP = {
     'nut_assembly':  {
         'n_task':   9, 
         'env_fn':   nut_expert,
-        'panda':    'PandaNutAssemblyDistractor',
-        'sawyer':   'SawyerNutAssemblyDistractor',
+        'panda':    'Panda_NutAssemblyDistractor',
+        'sawyer':   'Sawyer_NutAssemblyDistractor',
+        'ur5e':     'UR5e_NutAssemblyDistractor',
         },
 }
     
@@ -115,10 +116,11 @@ if __name__ == '__main__':
     elif args.n_env:
         envs, rng = [263237945 + i for i in range(args.n_env)], random.Random(385008283)
         seeds = [int(rng.choice(envs)) for _ in range(args.N)]
+        print(f"1---------- {seeds} ------")
     else:
         n_per_group = args.per_task_group
         seeds = [263237945 + int(n // (args.n_tasks * n_per_group)) * n_per_group + n % n_per_group for n in range(args.N)]
-
+        print(f"2---------- {seeds} ------")
     # select proper names and functions
     assert (args.task_name in args.save_dir and args.robot in args.save_dir), args.save_dir 
     
@@ -176,7 +178,7 @@ if __name__ == '__main__':
                 env_seed=args.give_env_seed, camera_obs=args.collect_cam, seeds=seeds, n_per_group=args.per_task_group, \
                 renderer=args.renderer, \
                 gpu_count=count, \
-                gpu_id=args.gpu_id,  
+                gpu_id_indx=args.gpu_id_indx,  
                 ctrl_config=args.ctrl_config, \
                 color=args.color, shape=args.shape)
 

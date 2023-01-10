@@ -506,16 +506,6 @@ class NutAssembly(DefaultNutAssembly):
                 contains a rendered depth map from the simulation
         """
         di = super()._get_observation()
-        if self.use_camera_obs:
-            cam_name = self.camera_names[0]
-            #in_hand_cam_name = self.camera_names[1]
-            di['image'] = di[cam_name + '_image'].copy()
-            #di['hand_image'] = di[in_hand_cam_name + '_image'].copy()
-            del di[cam_name + '_image']
-            #del di[in_hand_cam_name + '_image']
-            if self.camera_depths[0]:
-                di['depth'] = di[cam_name + '_depth'].copy()
-                di['depth'] = ((di['depth'] - 0.95) / 0.05 * 255).astype(np.uint8)
 
         if self.single_object_mode == 2:
             di['target-object'] = self.nut_id
