@@ -180,7 +180,7 @@ class NutAssemblyController:
                 status = 'obj_in_hand'
         # Phase 3
         elif np.linalg.norm(
-                self._target_loc - self.get_center_loc()) > self._final_thresh and self._object_in_hand(obs) and prev_status!="assembling":
+                self._target_loc - self.get_center_loc()) > self._final_thresh and prev_status!="assembling":
             target = self._target_loc
             eef_pose = self._get_target_pose(target - self.get_center_loc(), obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [1]))
@@ -193,9 +193,10 @@ class NutAssemblyController:
             action = np.concatenate((eef_pose, [1]))
             status = 'assembling'
         else:
-            eef_pose = self._get_target_pose(0, obs['eef_pos'], self._target_quat)
-            action = np.concatenate((eef_pose, [-1]))
-            status = 'releasing'
+            if prev_status=='assembling': 
+                eef_pose = self._get_target_pose(0, obs['eef_pos'], self._target_quat)
+                action = np.concatenate((eef_pose, [-1]))
+                status = 'releasing'            
         self._t += 1
         nut_assembly_logger.debug(f"Status {status}")
         return action, status

@@ -53,10 +53,10 @@ def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camer
             seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx, color=color,shape=shape)
         else:
             traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx, render_camera="camera_lateral_right")
             if len(traj) < 5: # try again
                 traj = env_func(env_type, controller_type=config, renderer=renderer, camera_obs=camera_obs, task=task, \
-                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx)
+                seed=seed, env_seed=env_seed, gpu_id=gpu_id_indx, render_camera="camera_lateral_right")
             
         # let's make a new folder structure for easier dataloader construct: 
         # env_type/task_id/traj_idx.pkl, where idxes start from 0 within each sub-task

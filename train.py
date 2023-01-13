@@ -183,7 +183,7 @@ class Trainer:
             mod = model.module if isinstance(model, nn.DataParallel) else model 
             mod.momentum_update(frac)
             
-            for inputs in self. _train_loader:
+            for inputs in self._train_loader:
                 optimizer.zero_grad() 
                 task_losses = self.calculate_task_loss(model, inputs)
                 weighted_task_loss = sum([l["loss_sum"] * task_loss_muls.get(name) for name, l in task_losses.items()]) 

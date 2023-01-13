@@ -158,7 +158,11 @@ class PickPlace(SingleArmEnv):
                 object_type
             ]  # use for convenient indexing
         self.y_ranges = y_ranges
-
+        print(env_conf.keys())
+        self.x_ranges = env_conf['x_ranges']
+        self.bin_position_x = env_conf['bin_position_x']
+        self.bin_position_y = env_conf['bin_position_y']
+        
         # reward configuration
         self.reward_scale = reward_scale
         self.reward_shaping = reward_shaping
@@ -190,7 +194,7 @@ class PickPlace(SingleArmEnv):
             render_gpu_device_id=render_gpu_device_id,
             control_freq=control_freq,
             horizon=horizon,
-            ignore_done=ignore_done,
+            ignore_done=env_conf['ignore_done'],
             hard_reset=hard_reset,
             camera_names=camera_names,
             camera_heights=camera_heights,
@@ -313,7 +317,7 @@ class PickPlace(SingleArmEnv):
                 sampler=UniformRandomSampler(
                     name='obj'+str(i)+"Sampler",
                     mujoco_objects=self.objects[i],
-                    x_range=[-0.065, -0.035],
+                    x_range=self.x_ranges[0],
                     y_range=self.y_ranges[arr[i]],
                     rotation=[0, 0 + 1e-4],
                     rotation_axis='z',
@@ -328,8 +332,8 @@ class PickPlace(SingleArmEnv):
             UniformRandomSampler(
                 name="BinSampler",
                 mujoco_objects=self.bin,
-                x_range=[0.24, 0.24+0.000001],
-                y_range=[0.025, 0.025+0.000001],
+                x_range=[self.bin_position_x[0], self.bin_position_x[1]+ 1e-4],
+                y_range=[self.bin_position_y[0], self.bin_position_y[1]+ 1e-4],
                 rotation=[0, 0 + 1e-4],
                 rotation_axis='z',
                 ensure_object_boundary_in_range=True,

@@ -112,7 +112,7 @@ class DefaultNutAssembly(SingleArmEnv):
             render_gpu_device_id=render_gpu_device_id,
             control_freq=control_freq,
             horizon=horizon,
-            ignore_done=ignore_done,
+            ignore_done=env_conf['ignore_done'],
             hard_reset=hard_reset,
             camera_names=camera_names,
             camera_heights=camera_heights,
@@ -279,6 +279,14 @@ class DefaultNutAssembly(SingleArmEnv):
                                         pos=self.camera_poses[camera_name][0],
                                         quat=self.camera_poses[camera_name][1],
                                         camera_attribs=self.camera_attribs)
+
+        # modify robot0_eye_in_hand
+        if self.robots[0].robot_model.default_gripper == "Robotiq85Gripper":
+            self.robots[0].robot_model.set_camera(camera_name="eye_in_hand",
+                                                  pos=self.camera_gripper["Robotiq85Gripper"]["pose"][0],
+                                                  quat=self.camera_gripper["Robotiq85Gripper"]["pose"][1],
+                                                  root=self.camera_gripper["Robotiq85Gripper"]["root"],
+                                                  camera_attribs=self.camera_attribs)
 
         # Arena always gets set to zero origin
         mujoco_arena.set_origin([0, 0, 0])
