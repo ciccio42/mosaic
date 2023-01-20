@@ -3,20 +3,10 @@ Evaluate >=1 checkpoints saved throughout one model's training run
 """
 from robosuite import load_controller_config
 from robosuite.utils.transform_utils import quat2axisangle
-from robosuite_env.controllers.expert_basketball import \
-    get_expert_trajectory as basketball_expert
-from robosuite_env.controllers.expert_nut_assembly import \
+from robosuite_env.new_controllers.expert_nut_assembly import \
     get_expert_trajectory as nut_expert
-from robosuite_env.controllers.expert_pick_place import \
-    get_expert_trajectory as place_expert 
-from robosuite_env.controllers.expert_block_stacking import \
-    get_expert_trajectory as stack_expert 
-from robosuite_env.controllers.expert_drawer import \
-    get_expert_trajectory as draw_expert 
-from robosuite_env.controllers.expert_button import \
-    get_expert_trajectory as press_expert 
-from robosuite_env.controllers.expert_door import \
-    get_expert_trajectory as door_expert 
+from robosuite_env.new_controllers.expert_pick_place import \
+    get_expert_trajectory as place_expert
 from eval_functions import *
  
 import random
@@ -55,63 +45,20 @@ set_start_method('forkserver', force=True)
 USER = 'mandi'
  
 TASK_MAP = {
-    'basketball': {
-        'num_variations':   12, 
-        'env_fn':   basketball_expert,
-        'eval_fn':  basketball_eval,
-        'agent-teacher': ('PandaBasketball', 'SawyerBasketball'),
-        'render_hw': (100, 180), # new bask_hard is 150 270!
-        },
     'nut_assembly':  {
         'num_variations':   9, 
         'env_fn':   nut_expert,
         'eval_fn':  nut_assembly_eval,
-        'agent-teacher': ('PandaNutAssemblyDistractor', 'SawyerNutAssemblyDistractor'),
+        'agent-teacher': ('UR5ePickPlaceDistractor','PandaNutAssemblyDistractor', 'SawyerNutAssemblyDistractor'),
         'render_hw': (100, 180), 
-        },
-    'new_pick_place': {
-        'num_variations':   16, 
-        'env_fn':   place_expert,
-        'eval_fn':  pick_place_eval,
-        'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-        'render_hw': (100, 180), #(150, 270)
         },
     'pick_place': {
         'num_variations':   16, 
         'env_fn':   place_expert,
         'eval_fn':  pick_place_eval,
-        'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-        'render_hw': (200, 360), #(150, 270)
+        'agent-teacher': ('UR5ePickPlaceDistractor','PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
+        'render_hw': (100, 180), #(150, 270)
         },
-    'stack_block': {
-        'num_variations':   6, 
-        'env_fn':   stack_expert,
-        'eval_fn':  block_stack_eval,
-        'agent-teacher': ('PandaBlockStacking', 'SawyerBlockStacking'),
-        'render_hw': (100, 180), ## older models used 100x200!!
-        },
-    'drawer': {
-        'num_variations':   8,
-        'env_fn':   draw_expert,
-        'eval_fn':  draw_eval,
-        'agent-teacher': ('PandaDrawer', 'SawyerDrawer'),
-        'render_hw': (100, 180),
-    },
-    'button': {
-        'num_variations':   6,
-        'env_fn':   press_expert,
-        'eval_fn':  press_button_eval,
-        'agent-teacher': ('PandaButton', 'SawyerButton'),
-        'render_hw': (100, 180),
-    },
-    'door': {
-        'num_variations':   4,
-        'env_fn':   door_expert,
-        'eval_fn':  open_door_eval,
-        'agent-teacher': ('PandaDoor', 'SawyerDoor'),
-        'render_hw': (100, 180),
-    },
-
     }
 
 def select_random_frames(frames, n_select, sample_sides=True):
@@ -274,16 +221,20 @@ if __name__ == '__main__':
 
     parser.add_argument('--baseline', '-bline', default=None, type=str, help='baseline uses more frames at each test-time step')
 
-
+    import debugpy
+    debugpy.listen(('0.0.0.0', 5678))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
+    print("---- Testing ----")
     args = parser.parse_args()
     try_path = args.model
     if 'data' not in args.model and 'mosaic' not in args.model:
         print("Appending dir to given exp_name: ", args.model)
-        try_path = join(f'/home/{USER}/mosaic/log_data', args.model)
+        try_path = join(f"/home/{USER}/mosaic/log_data", args.model)
         if not os.path.exists(try_path):
-            try_path = join(f'/shared/{USER}/mosaic', args.model)
+            try_path = join(f"/shared/{USER}/mosaic", args.model)
         if not os.path.exists(try_path):
-            try_path = join(f'/home/{USER}/mosaic/baseline_data', args.model)
+            try_path = join(f"/home/{USER}/mosaic/baseline_data", args.model)
         assert os.path.exists(try_path), "Cannot find appending dir anywhere"
     
     ## decide which checkpoints to eval:

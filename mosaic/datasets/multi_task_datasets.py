@@ -98,7 +98,7 @@ class MultiTaskPairedDataset(Dataset):
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
-            print("---- Agent name {} ----\n---- Demo name {} ".format(agent_name, demo_name))
+            print("---- Agent name {} ----\n---- Demo name {} ----".format(agent_name, demo_name))
             if mode == 'train':
                 print("Loading task [{:<9}] saved on date {}".format(name, date))
             if date is None:
@@ -252,7 +252,7 @@ class MultiTaskPairedDataset(Dataset):
             else:
                 n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
             #frames.append(_make_frame(n))
-            obs = traj.get(n)['obs']['image']
+            obs = traj.get(n)['obs']['camera_front_image']
 
             processed = self.frame_aug(task_name, obs)
             frames.append(processed)
@@ -304,7 +304,7 @@ class MultiTaskPairedDataset(Dataset):
         for j, t in enumerate(chosen_t):
             t = t.item()
             step_t = traj.get(t)
-            image = step_t['obs']['image']
+            image = step_t['obs']['camera_front_image']
             processed = self.frame_aug(task_name, image)
             images.append( processed )
             if self.aug_twice:
@@ -382,8 +382,8 @@ class DIYBatchSampler(Sampler):
         - shuffle:
             if true, we lose control over how each batch is distributed to gpus
         """
-        batch_size = sampler_spec.get('batch_size', 30)
-        drop_last  = sampler_spec.get('drop_last', False)
+        batch_size = sampler_spec.get('batch_size')
+        drop_last  = sampler_spec.get('drop_last')
         if not isinstance(batch_size, int) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "

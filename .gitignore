@@ -134,3 +134,5 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+bashes2/outputs/*

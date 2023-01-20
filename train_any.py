@@ -68,7 +68,7 @@ class Trainer:
         model = model.to(self._device)
         if self.device_count > 1 and not isinstance(model, nn.DataParallel):
             print("Training stage \n Device list: {}".format(self.device_list))
-            model = nn.DataParallel(model, device_ids=self.device_list)
+            model = nn.DataParallel(model, device_ids=[3,0,1,2])
 
         # initialize optimizer and lr scheduler
         optim_weights       = optim_weights if optim_weights is not None else model.parameters()
@@ -295,6 +295,7 @@ def main(cfg):
     all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
     
     if cfg.single_task:
+        print(f"Using only one task {cfg.single_task}")
         cfg.tasks = [tsk for tsk in all_tasks_cfgs if tsk.name == cfg.single_task]
     
     if cfg.use_all_tasks:

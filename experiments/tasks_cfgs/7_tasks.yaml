@@ -1,5 +1,5 @@
-nut_assembly:
-  name:             'nut_assembly' 
+nut_assembly2:
+  name:             'nut_assembly2' 
   n_tasks:          9
   crop:             [0,0,0,0]
   n_per_task:       3
@@ -8,6 +8,17 @@ nut_assembly:
   task_per_batch:   9 
   traj_per_subtask:  100
   demo_per_subtask:  100 
+
+nut_assembly:
+  name:             'nut_assembly' 
+  n_tasks:          3 # the number of tasks to use for training
+  crop:             [0,0,0,0]
+  n_per_task:       3 # number of trajectories used for training, NOTE: n_tasks*n_per_task must be equal to bsize
+  task_ids:         [0,1,2]
+  loss_mul:         1
+  task_per_batch:   2 
+  traj_per_subtask:  5
+  demo_per_subtask:  5 
  
 door: 
   name:             'door' 
