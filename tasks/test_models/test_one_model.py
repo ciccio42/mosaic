@@ -3,9 +3,9 @@ Evaluate >=1 checkpoints saved throughout one model's training run
 """
 from robosuite import load_controller_config
 from robosuite.utils.transform_utils import quat2axisangle
-from robosuite_env.new_controllers.expert_nut_assembly import \
+from robosuite_env.controllers.new_controllers.expert_nut_assembly import \
     get_expert_trajectory as nut_expert
-from robosuite_env.new_controllers.expert_pick_place import \
+from robosuite_env.controllers.new_controllers.expert_pick_place import \
     get_expert_trajectory as place_expert
 from eval_functions import *
  
@@ -42,26 +42,25 @@ import learn2learn as l2l
 import wandb 
 
 set_start_method('forkserver', force=True)
-USER = 'mandi'
  
 TASK_MAP = {
     'nut_assembly':  {
         'num_variations':   9, 
         'env_fn':   nut_expert,
         'eval_fn':  nut_assembly_eval,
-        'agent-teacher': ('UR5ePickPlaceDistractor','PandaNutAssemblyDistractor', 'SawyerNutAssemblyDistractor'),
+        'agent-teacher': ('UR5e_NutAssemblyDistractor','UR5e_NutAssemblyDistractor'),
         'render_hw': (100, 180), 
         },
     'pick_place': {
         'num_variations':   16, 
         'env_fn':   place_expert,
         'eval_fn':  pick_place_eval,
-        'agent-teacher': ('UR5ePickPlaceDistractor','PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
+        'agent-teacher': ('UR5e_PickPlaceDistractor','UR5e_PickPlaceDistractor', 'SawyerPickPlaceDistractor'),
         'render_hw': (100, 180), #(150, 270)
         },
     }
 
-def select_random_frames(frames, n_select, sample_sides=True):
+def select_random_frames(frames, n_select, sample_sides=True, camera_name='image'):
     selected_frames = []
     clip = lambda x : int(max(0, min(x, len(frames) - 1)))
     per_bracket = max(len(frames) / n_select, 1)
@@ -77,7 +76,7 @@ def select_random_frames(frames, n_select, sample_sides=True):
     if isinstance(frames, (list, tuple)):
         return [frames[i] for i in selected_frames]
     elif isinstance(frames, Trajectory):
-        return [frames[i]['obs']['image'] for i in selected_frames]
+        return [frames[i]['obs'][camera_name] for i in selected_frames]
         #return [frames[i]['obs']['image-state'] for i in selected_frames]
     return frames[selected_frames]
 
@@ -109,10 +108,13 @@ def build_tvf_formatter(config, env_name='stack'):
     return resize_crop 
 
 def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut', 
-    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, ):
+    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, controller_config_path=None, camera_name='image'):
     create_seed = random.Random(None)
     create_seed = create_seed.getrandbits(32)
-    controller = load_controller_config(default_controller='IK_POSE')
+    if controller_config_path is None:
+        controller = load_controller_config(default_controller='IK_POSE')
+    else:
+        controller = load_controller_config(custom_fpath=controller_config_path)
     assert gpu_id != -1
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name
@@ -124,22 +126,22 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     if 'Stack' in teacher_name:
         teacher_expert_rollout = env_fn( teacher_name, \
             controller_type=controller, task=variation, size=size, shape=shape, color=color, \
-            seed=create_seed, heights=heights, widths=widths, gpu_id=gpu_id)
+            seed=create_seed,gpu_id=gpu_id)
         agent_env = env_fn( agent_name, \
             size=size, shape=shape, color=color, 
             controller_type=controller, task=variation, ret_env=True, seed=create_seed, 
-             heights=heights, widths=widths, gpu_id=gpu_id)
+            gpu_id=gpu_id)
     else:
         teacher_expert_rollout = env_fn( teacher_name, \
             controller_type=controller, task=variation, \
-            seed=create_seed, heights=heights, widths=widths, gpu_id=gpu_id)
+            seed=create_seed,gpu_id=gpu_id)
 
         agent_env = env_fn( agent_name, \
             controller_type=controller, task=variation, ret_env=True, seed=create_seed, 
-             heights=heights, widths=widths, gpu_id=gpu_id)
+            gpu_id=gpu_id)
     
     assert isinstance(teacher_expert_rollout, Trajectory)
-    context = select_random_frames(teacher_expert_rollout, T_context, sample_sides=True)
+    context = select_random_frames(teacher_expert_rollout, T_context, sample_sides=True, camera_name=camera_name)
     context = [img_formatter(i)[None] for i in context]
     # assert len(context ) == 6
     if isinstance(context[0], np.ndarray):
@@ -147,7 +149,6 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     else:
         context = torch.cat(context, dim=0)[None]
         
-
     return agent_env, context, variation, teacher_expert_rollout
 
 def rollout_imitation(model, config, ctr, 
@@ -166,12 +167,13 @@ def rollout_imitation(model, config, ctr,
     env, context, variation_id, expert_traj = build_env_context(
         img_formatter,
         T_context=T_context, ctr=ctr, env_name=env_name, 
-        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id)
+        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id, controller_config_path=config.controller_config_path,
+        camera_name=config.dataset_cfg.camera_name)
     
     build_task = TASK_MAP.get(env_name, dict())
     assert build_task, 'Got unsupported task '+env_name
     eval_fn = build_task['eval_fn']
-    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
+    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline, camera_name=config.dataset_cfg.camera_name)
     #print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
     print("Evaluated traj #{}, variation#{}, success? {} ".format(ctr, variation_id, info['success']))
     
@@ -229,12 +231,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     try_path = args.model
     if 'data' not in args.model and 'mosaic' not in args.model:
-        print("Appending dir to given exp_name: ", args.model)
-        try_path = join(f"/home/{USER}/mosaic/log_data", args.model)
-        if not os.path.exists(try_path):
-            try_path = join(f"/shared/{USER}/mosaic", args.model)
-        if not os.path.exists(try_path):
-            try_path = join(f"/home/{USER}/mosaic/baseline_data", args.model)
         assert os.path.exists(try_path), "Cannot find appending dir anywhere"
     
     ## decide which checkpoints to eval:

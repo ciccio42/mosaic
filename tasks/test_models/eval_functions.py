@@ -56,9 +56,10 @@ def startup_env(model, env, context, gpu_id, variation_id, baseline=None):
     tasks = {'success': False, 'reached': False, 'picked': False, 'variation_id': variation_id}
     return done, states, images, context, obs, traj, tasks
 
-def nut_assembly_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def nut_assembly_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
+    # istantiate the support variables
     done, states, images, context, obs, traj, tasks = \
-        startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
+       startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     
     object_name = env.nuts[env.nut_id].name
     if env.nut_id == 0:
@@ -77,7 +78,7 @@ def nut_assembly_eval(model, env, context, gpu_id, variation_id, img_formatter, 
         if baseline and len(states) >= 5:
             states, images = [], []
         states.append(np.concatenate((obs['ee_aa'], obs['gripper_qpos'])).astype(np.float32)[None])
-        images.append(img_formatter(obs['image'])[None])
+        images.append(img_formatter(obs[camera_name])[None])
         action = get_action(model, states, images, context, gpu_id, n_steps, max_T, baseline)
         
         obs, reward, env_done, info = env.step(action)
@@ -94,7 +95,7 @@ def nut_assembly_eval(model, env, context, gpu_id, variation_id, img_formatter, 
     #print("Done evaluating traj #{}, task#{}, success? {} ".format(ctr, variation_id, tasks['success']))
     return traj, tasks
 
-def basketball_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def basketball_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
 
@@ -126,7 +127,7 @@ def basketball_eval(model, env, context, gpu_id, variation_id, img_formatter, ma
     
     return traj, tasks
 
-def block_stack_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def block_stack_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     n_steps = 0
@@ -159,7 +160,7 @@ def block_stack_eval(model, env, context, gpu_id, variation_id, img_formatter, m
     return traj, tasks
 
 
-def press_button_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def press_button_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     n_steps = 0
@@ -196,7 +197,7 @@ def press_button_eval(model, env, context, gpu_id, variation_id, img_formatter, 
     
     return traj, tasks
 
-def pick_place_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def pick_place_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     n_steps = 0
@@ -231,7 +232,7 @@ def pick_place_eval(model, env, context, gpu_id, variation_id, img_formatter, ma
     
     return traj, tasks
 
-def draw_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def draw_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     n_steps = 0
@@ -262,7 +263,7 @@ def draw_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85
     del model
     return traj, tasks
 
-def open_door_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
+def open_door_eval(model, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False, camera_name='image'):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id, variation_id, baseline=baseline)
     n_steps = 0

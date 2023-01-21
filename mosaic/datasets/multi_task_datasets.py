@@ -52,6 +52,7 @@ class MultiTaskPairedDataset(Dataset):
         aux_pose=False,
         agent_name="panda",
         demo_name="ur5e",
+        camera_name="camera_front_image",
         **params):
         """
         Args:
@@ -95,6 +96,7 @@ class MultiTaskPairedDataset(Dataset):
         count               = 0
         self.task_to_idx    = defaultdict(list)
         self.subtask_to_idx = OrderedDict()
+        self.camera_name = camera_name
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
@@ -252,7 +254,7 @@ class MultiTaskPairedDataset(Dataset):
             else:
                 n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
             #frames.append(_make_frame(n))
-            obs = traj.get(n)['obs']['camera_front_image']
+            obs = traj.get(n)['obs'][self.camera_name]
 
             processed = self.frame_aug(task_name, obs)
             frames.append(processed)
@@ -304,7 +306,7 @@ class MultiTaskPairedDataset(Dataset):
         for j, t in enumerate(chosen_t):
             t = t.item()
             step_t = traj.get(t)
-            image = step_t['obs']['camera_front_image']
+            image = step_t['obs'][self.camera_name]
             processed = self.frame_aug(task_name, image)
             images.append( processed )
             if self.aug_twice:

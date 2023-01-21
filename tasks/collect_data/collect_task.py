@@ -37,6 +37,7 @@ def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camer
     if isinstance(N, int):
         N = [N]
     for n in N:
+        print(f"Trajectory number {n}")
         # NOTE(Mandi): removed the 'continue' part, always writes new data 
         task = int((n % (n_tasks * n_per_group)) // n_per_group)
         seed = None if seeds is None else seeds[n]

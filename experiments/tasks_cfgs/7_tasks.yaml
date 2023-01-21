@@ -11,14 +11,15 @@ nut_assembly2:
 
 nut_assembly:
   name:             'nut_assembly' 
-  n_tasks:          3 # the number of tasks to use for training
+  n_tasks:          4 # the number of tasks to use for training
   crop:             [0,0,0,0]
   n_per_task:       3 # number of trajectories used for training, NOTE: n_tasks*n_per_task must be equal to bsize
-  task_ids:         [0,1,2]
+  task_ids:         [0,1,2,3]
   loss_mul:         1
-  task_per_batch:   2 
-  traj_per_subtask:  5
-  demo_per_subtask:  5 
+  task_per_batch:   4
+  # the number of trajectory to consider for sampling the files are split between training and validation according to defined ratio
+  traj_per_subtask:  10 
+  demo_per_subtask:  10
  
 door: 
   name:             'door' 
