@@ -139,8 +139,8 @@ class MultiTaskPairedDataset(Dataset):
                         self.task_to_idx[name].append(count)
                         self.subtask_to_idx[name][task_id].append(count)
                         count += 1
-            #print('Done loading Task {}, agent/demo trajctores pairs reach a count of: {}'.format(name, count))
             self.task_crops[name] = spec.get('crop', [0,0,0,0])
+        print('Done loading Task {}, agent/demo trajctores pairs reach a count of: {}'.format(name, count))
         self.pairs_count = count
         self.task_count = len(tasks_spec)
 

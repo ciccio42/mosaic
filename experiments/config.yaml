@@ -1,9 +1,9 @@
-save_path:      /home/mandi/mosaic/log_data
-save_freq:      1000
-log_freq:       1000
-val_freq:       1000 
-print_freq:     1000
-save_optim:     False
+save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder
+save_freq:      1620
+log_freq:       1
+val_freq:       1620 
+print_freq:     1620
+save_optim:     True
 resume:         False
 resume_path:    None
 device:         -1
@@ -24,7 +24,7 @@ rep_muls:
   simclr_post:        ${simclr.mul_pos}
   simclr_intm:        ${simclr.mul_intm}
 
-wandb_log: False 
+wandb_log: True 
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
@@ -52,10 +52,10 @@ limit_num_traj: -1
 limit_num_demo: -1
 defaults:
   - tasks_cfgs:  7_tasks
-EXPERT_DATA:    '/home/mandi/mosaic_multitask_dataset' 
+EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
 
 # dataset/loader/samplers
-loader_workers:     10 
+loader_workers:     4 
 samplers:        
   batch_size:         ${bsize}
   drop_last:          False

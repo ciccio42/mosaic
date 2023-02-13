@@ -12,7 +12,7 @@ torch.autograd.set_detect_anomaly(True)
 import learn2learn as l2l
 from train_utils import * 
 import wandb 
-
+from copy import deepcopy
 class Trainer:
     def __init__(self, allow_val_grad=False, hydra_cfg=None):
         assert hydra_cfg is not None, "Need to start with hydra-enabled yaml file!"
@@ -26,6 +26,8 @@ class Trainer:
         # set of file saving
         assert os.path.exists(self.config.save_path), "Warning! Save path {} doesn't exist".format(self.config.save_path)
         assert self.config.exp_name != -1, 'Specify an experiment name for log data!'
+        self._best_validation_loss = float('inf')
+        self._best_validation_weights = None
 
         append = "-Batch{}".format(int(self.config.bsize)) 
         if 'mosaic' in hydra_cfg.policy._target_:
@@ -105,20 +107,8 @@ class Trainer:
             frac = e / epochs  
             for inputs in self._train_loader:
 
-                if self._step % save_freq == 0: # save model AND stats
-                    self.save_checkpoint(model, optimizer, weights_fn, save_fn)
-                    if save_fn is not None:
-                        save_fn(self._save_fname, self._step)
-                    else:
-                        save_module = model
-                        if weights_fn is not None:
-                            save_module = weights_fn()
-                        elif isinstance(model, nn.DataParallel):
-                            save_module = model.module
-                        torch.save(save_module.state_dict(), self._save_fname + '-{}.pt'.format(self._step))
-                    if self.config.get('save_optim', False):
-                        torch.save(optimizer.state_dict(), self._save_fname + '-optim-{}.pt'.format(self._step))
-
+                if self._step % save_freq == 0: # stats
+                    # self.save_checkpoint(model, optimizer, weights_fn, save_fn)
                     stats_save_name = join(self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
                     json.dump({k: str(v) for k, v in raw_stats.items()}, open(stats_save_name, 'w'))
                     
@@ -178,6 +168,14 @@ class Trainer:
                         print('Validation step {}:'.format(self._step))
                         print(val_print)
                     
+                    # check if the current model is the best one
+                    if avg_losses[self.config.single_task]['loss_sum'] < self._best_validation_loss:
+                        # update values
+                        self._best_validation_loss = avg_losses[self.config.single_task]['loss_sum']
+                        # save model
+                        self._best_validation_weights = deepcopy(model.state_dict())
+                        torch.save(self._best_validation_weights, self._save_fname + 'best-val-model-{}.pt'.format(self._step))
+
                     model = model.train()
                 
                 self._step += 1
@@ -191,7 +189,7 @@ class Trainer:
         ## when all epochs are done, save model one last time
         self.save_checkpoint(model, optimizer, weights_fn, save_fn)
 
-    def save_checkpoint(self, model, optimizer, weights_fn=None, save_fn=None):
+    def save_checkpoint(self, model, optimizer, weights_fn=None, save_fn=None):        
         if save_fn is not None:
             save_fn(self._save_fname, self._step)
         else:
@@ -287,6 +285,7 @@ class Workspace(object):
 
 
 @hydra.main(
+    version_base=None,
     config_path="experiments", 
     config_name="config.yaml")
 def main(cfg): 

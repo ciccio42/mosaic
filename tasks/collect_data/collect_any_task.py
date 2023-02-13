@@ -91,7 +91,7 @@ def save_rollout(N, env_type, env_func, save_dir, n_tasks, env_seed=False, camer
         N = [N]
     for n in N:
         # NOTE(Mandi): removed the 'continue' part, always writes new data 
-        task = int((n % (n_tasks * n_per_group)) // n_per_group)
+        task = int(((n) % (n_tasks * n_per_group)) // n_per_group)
         seed = None if seeds is None else seeds[n]
         env_seed = seeds[n - n % n_per_group] if seeds is not None and env_seed else None
         config = load_controller_config(default_controller='IK_POSE')
@@ -212,6 +212,7 @@ if __name__ == '__main__':
         assert not args.renderer, "can't display rendering when using multiple workers"
 
         with Pool(args.num_workers) as p:
+            print("Creation of pool")
             f = functools.partial(
                 save_rollout, 
                 env_type=env_name, env_func=env_fn, save_dir=args.save_dir, n_tasks=args.n_tasks, \
