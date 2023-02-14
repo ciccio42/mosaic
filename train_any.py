@@ -174,7 +174,7 @@ class Trainer:
                         self._best_validation_loss = avg_losses[self.config.single_task]['loss_sum']
                         # save model
                         self._best_validation_weights = deepcopy(model.state_dict())
-                        torch.save(self._best_validation_weights, self._save_fname + 'best-val-model-{}.pt'.format(self._step))
+                        torch.save(self._best_validation_weights, self._save_fname + '-best-val-model-{}.pt'.format(self._step))
 
                     model = model.train()
                 
@@ -327,4 +327,8 @@ def main(cfg):
     workspace.run()
 
 if __name__ == "__main__":
+    import debugpy
+    debugpy.listen(('0.0.0.0', 5678))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
     main()

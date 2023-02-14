@@ -18,7 +18,7 @@ def to_one_hot(tensor, n, fill_with=1.):
 
 
 class DiscreteMixLogistic(torch.distributions.Distribution):
-    def __init__(self, mean, log_scale, logit_probs, num_classes=256, log_scale_min=-7.0):
+    def __init__(self, mean, log_scale, logit_probs, num_classes=256, log_scale_min=-7.0, arg_constraints = {}):
         assert mean.device == log_scale.device and mean.device == logit_probs.device, "all tensors must lie on same device!"
         batch_shape = log_scale.shape[:-1]
         event_shape = mean.shape[len(batch_shape)+1:]
@@ -28,6 +28,7 @@ class DiscreteMixLogistic(torch.distributions.Distribution):
         self._logit_probs = logit_probs
         self._num_classes = num_classes
         self._log_scale_min = log_scale_min
+        self._arg_constraints = arg_constraints
 
     def log_prob(self, value):
         # reshape value to match convention

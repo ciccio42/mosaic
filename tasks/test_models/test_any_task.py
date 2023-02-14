@@ -44,7 +44,9 @@ from torchvision.transforms.functional import resized_crop
 import learn2learn as l2l
 
 set_start_method('forkserver', force=True)
-LOG_PATH='/home/mandi/mosaic/log_data'
+LOG_PATH=None
+import warnings
+warnings.filterwarnings("ignore", category=np.VisibleDeprecationWarning) 
 
 TASK_MAP = {
     'basketball': {
