@@ -63,7 +63,7 @@ class Trainer:
             #     print(k, dict(self.config.get(k)))
             #     print('-'*20)
             wandb_config = {k: self.config.get(k) for k in config_keys}
-            run = wandb.init(project='mosaic', name=self.config.exp_name, config=wandb_config)
+            run = wandb.init(project=self.config.project_name, name=self.config.exp_name, config=wandb_config)
 
         # create early stopping object
         self._early_stopping = EarlyStopping(patience=self.train_cfg.early_stopping.patience,
@@ -71,6 +71,7 @@ class Trainer:
         delta=self.train_cfg.early_stopping.delta,
         path=self.save_dir
         )
+
 
     def train(self, model, weights_fn=None, save_fn=None, optim_weights=None): 
         self._train_loader, self._val_loader = make_data_loaders(self.config, self.train_cfg.dataset)
@@ -89,7 +90,6 @@ class Trainer:
         epochs              = self.train_cfg.get('epochs', 1)
         vlm_alpha           = self.train_cfg.get('vlm_alpha', 0.6)
         log_freq            = self.train_cfg.get('log_freq', 1000)
-        print_freq          = self.train_cfg.get('print_freq', 10000)
 
         print("Loss multipliers: \n BC: {} inv: {} Point: {}".format(
             self.train_cfg.bc_loss_mult, self.train_cfg.inv_loss_mult, self.train_cfg.pnt_loss_mult))
@@ -174,7 +174,7 @@ class Trainer:
                             k: torch.mean(torch.stack(v)) for k, v in losses.items()}
                     
                     val_print = collect_stats(self._step, avg_losses, raw_stats, prefix='val')
-                    if (self._step % len(self._train_loader) == 0) or self._step==0:
+                    if (self._step % len(self._train_loader) == 0) or (self._step==0):
                         print('Validation step {}:'.format(self._step))
                         print(val_print)
                     
@@ -302,6 +302,12 @@ class Workspace(object):
     config_path="experiments", 
     config_name="config.yaml")
 def main(cfg): 
+    if cfg.debug:
+        import debugpy
+        debugpy.listen(('0.0.0.0', 5678))
+        print("Waiting for debugger attach")
+        debugpy.wait_for_client()
+
     from train_any import Workspace as W
     all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
     
@@ -340,8 +346,4 @@ def main(cfg):
     workspace.run()
 
 if __name__ == "__main__":
-    import debugpy
-    debugpy.listen(('0.0.0.0', 5678))
-    print("Waiting for debugger attach")
-    debugpy.wait_for_client()
     main()

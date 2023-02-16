@@ -1,4 +1,5 @@
-save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder
+debug: False
+save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -21,7 +22,8 @@ rep_muls:
   simclr_post:        ${simclr.mul_pos}
   simclr_intm:        ${simclr.mul_intm}
 
-wandb_log: False 
+wandb_log: True 
+project_name: mosaic_baseline
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
@@ -41,7 +43,7 @@ train_cfg:
 
 # early stopping configurator
 early_stopping_cfg:
-  patience: 2
+  patience: 5
   delta: 1e-3
 
 # tasks related
@@ -107,7 +109,7 @@ simclr:
   tau:              0.005      
   compressor_dim:   128
   temporal:         True
-  hidden_dim:       256
+  hidden_dim:       512 #256
   fix_step:         -1 
 byol: 
   p:                2
@@ -148,7 +150,7 @@ mosaic:
 
 actions:
   n_layers:         2    
-  out_dim:          64
+  out_dim:          256 #64
   hidden_dim:       128
   adim:             8
   n_mixtures:       4   
