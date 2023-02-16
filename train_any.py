@@ -13,7 +13,10 @@ import learn2learn as l2l
 from train_utils import * 
 import wandb 
 from copy import deepcopy
+from mosaic.utils.early_stopping import EarlyStopping
+
 class Trainer:
+
     def __init__(self, allow_val_grad=False, hydra_cfg=None):
         assert hydra_cfg is not None, "Need to start with hydra-enabled yaml file!"
         self.config = hydra_cfg
@@ -61,7 +64,14 @@ class Trainer:
             #     print('-'*20)
             wandb_config = {k: self.config.get(k) for k in config_keys}
             run = wandb.init(project='mosaic', name=self.config.exp_name, config=wandb_config)
- 
+
+        # create early stopping object
+        self._early_stopping = EarlyStopping(patience=self.train_cfg.early_stopping.patience,
+        verbose=True,
+        delta=self.train_cfg.early_stopping.delta,
+        path=self.save_dir
+        )
+
     def train(self, model, weights_fn=None, save_fn=None, optim_weights=None): 
         self._train_loader, self._val_loader = make_data_loaders(self.config, self.train_cfg.dataset)
         # wrap model in DataParallel if needed and transfer to correct device
@@ -79,9 +89,7 @@ class Trainer:
         epochs              = self.train_cfg.get('epochs', 1)
         vlm_alpha           = self.train_cfg.get('vlm_alpha', 0.6)
         log_freq            = self.train_cfg.get('log_freq', 1000)
-        val_freq            = self.train_cfg.get('val_freq', 1000)
-        print_freq          = self.train_cfg.get('print_freq', 10000) 
-        save_freq           = self.train_cfg.get('save_freq', 10000)
+        print_freq          = self.train_cfg.get('print_freq', 10000)
 
         print("Loss multipliers: \n BC: {} inv: {} Point: {}".format(
             self.train_cfg.bc_loss_mult, self.train_cfg.inv_loss_mult, self.train_cfg.pnt_loss_mult))
@@ -103,12 +111,12 @@ class Trainer:
         print(f"Training for {epochs} epochs train dataloader has length {len(self._train_loader)}, \
                 which sums to {epochs * len(self._train_loader)} total train steps, \
                 validation loader has length {len(self._val_loader)}")
+
         for e in range(epochs):
             frac = e / epochs  
             for inputs in self._train_loader:
-
-                if self._step % save_freq == 0: # stats
-                    # self.save_checkpoint(model, optimizer, weights_fn, save_fn)
+                # Save stats
+                if (self._step % len(self._train_loader) == 0 )or (self._step == 0): # stats
                     stats_save_name = join(self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
                     json.dump({k: str(v) for k, v in raw_stats.items()}, open(stats_save_name, 'w'))
                     
@@ -129,13 +137,15 @@ class Trainer:
                             for loss_name, loss_val in losses.items():
                                 tolog[f'train/{loss_name}/{task_name}'] = loss_val
                                 tolog[f'train/{task_name}/{loss_name}'] = loss_val
+                        
                         wandb.log(tolog)
                     
-                    if self._step % print_freq == 0:
+                    if (self._step % len(self._train_loader) == 0) or (self._step==0):
                         print('Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
                         print(train_print) 
 
-                if self._step % val_freq == 0:
+                ####---- Validation step ----####
+                if (self._step % len(self._train_loader) == 0) or (self._step==0):
                     # exhaust all data in val loader and take avg loss
                     all_val_losses = {task: defaultdict(list) for task in task_names}
                     val_iter = iter(self._val_loader)
@@ -164,19 +174,19 @@ class Trainer:
                             k: torch.mean(torch.stack(v)) for k, v in losses.items()}
                     
                     val_print = collect_stats(self._step, avg_losses, raw_stats, prefix='val')
-                    if self._step % print_freq == 0:
+                    if (self._step % len(self._train_loader) == 0) or self._step==0:
                         print('Validation step {}:'.format(self._step))
                         print(val_print)
                     
-                    # check if the current model is the best one
-                    if avg_losses[self.config.single_task]['loss_sum'] < self._best_validation_loss:
-                        # update values
-                        self._best_validation_loss = avg_losses[self.config.single_task]['loss_sum']
-                        # save model
-                        self._best_validation_weights = deepcopy(model.state_dict())
-                        torch.save(self._best_validation_weights, self._save_fname + '-best-val-model-{}.pt'.format(self._step))
+                    # compute the sum of validation losses
+                    weighted_task_loss_val = sum([l["loss_sum"] * task_loss_muls.get(name) for name, l in avg_losses.items()])
+                    # check for early stopping
+                    self._early_stopping(weighted_task_loss_val, model, self._step)
 
                     model = model.train()
+                    
+                    if self._early_stopping.early_stop:
+                        break
                 
                 self._step += 1
                 # update target params
@@ -185,7 +195,10 @@ class Trainer:
                     mod.momentum_update(frac)
                     if self._step % self.train_cfg.target_update_freq == 0:
                         mod.soft_param_update()
-  
+
+                if self._early_stopping.early_stop:
+                    print("Stop training for early-stopping")
+
         ## when all epochs are done, save model one last time
         self.save_checkpoint(model, optimizer, weights_fn, save_fn)
 
@@ -290,7 +303,7 @@ class Workspace(object):
     config_name="config.yaml")
 def main(cfg): 
     from train_any import Workspace as W
-    all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.new_pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
+    all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
     
     if cfg.single_task:
         cfg.tasks = [tsk for tsk in all_tasks_cfgs if tsk.name == cfg.single_task]

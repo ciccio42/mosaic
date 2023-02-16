@@ -63,19 +63,19 @@ TASK_MAP = {
         'agent-teacher': ('PandaNutAssemblyDistractor', 'SawyerNutAssemblyDistractor'),
         'render_hw': (100, 180), 
         },
-    'new_pick_place': {
-        'num_variations':   16, 
-        'env_fn':   place_expert,
-        'eval_fn':  pick_place_eval,
-        'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-        'render_hw': (100, 180),  
-        },
+    #'new_pick_place': {
+    #    'num_variations':   16, 
+    #    'env_fn':   place_expert,
+    #    'eval_fn':  pick_place_eval,
+    #    'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
+    #    'render_hw': (100, 180),  
+    #    },
     'pick_place': {
         'num_variations':   16, 
         'env_fn':   place_expert,
         'eval_fn':  pick_place_eval,
         'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-        'render_hw': (200, 360), #(150, 270)
+        'render_hw': (100, 180), #(150, 270)
         },
     'stack_block': {
         'num_variations':   6, 

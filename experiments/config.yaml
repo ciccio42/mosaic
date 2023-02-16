@@ -1,12 +1,9 @@
 save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder
-save_freq:      1620
 log_freq:       1
-val_freq:       1620 
-print_freq:     1620
 save_optim:     True
 resume:         False
 resume_path:    None
-device:         -1
+device:         0
 exp_name:       -1
 epochs:         10
 bsize:          30
@@ -31,7 +28,6 @@ train_cfg:
   lr:                   5e-4
   epochs:               ${epochs}
   log_freq:             ${log_freq}
-  val_freq:             ${val_freq}
   save_freq:            ${save_freq}
   print_freq:           ${print_freq}
   inv_loss_mult:        ${inv_mul}
@@ -41,6 +37,12 @@ train_cfg:
   dataset:              ${dataset_cfg}
   sampler:              ${samplers}
   target_update_freq:   5  # used for soft parameter update
+  early_stopping: ${early_stopping_cfg}
+
+# early stopping configurator
+early_stopping_cfg:
+  patience: 2
+  delta: 1e-3
 
 # tasks related
 tasks:       ???
