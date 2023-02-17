@@ -239,7 +239,7 @@ def _proc(model, config, results_dir, heights, widths, size, shape, color, env_n
             max_T=60, env_name=env_name, baseline=baseline)
         pkl.dump(rollout, open(results_dir+'/traj{}.pkl'.format(n), 'wb'))
         pkl.dump(expert_traj, open(results_dir+'/demo{}.pkl'.format(n), 'wb'))
-        pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb'))
+        pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb')) 
         json.dump({k: int(v) for k, v in task_success_flags.items()}, open(results_dir+'/traj{}.json'.format(n), 'w'))
     del model
     return task_success_flags
