@@ -14,6 +14,7 @@ from train_utils import *
 import wandb 
 from copy import deepcopy
 from mosaic.utils.early_stopping import EarlyStopping
+from tqdm import tqdm
 
 class Trainer:
 
@@ -87,7 +88,16 @@ class Trainer:
         optimizer, scheduler = self._build_optimizer_and_scheduler(optim_weights, self.train_cfg)
 
         # initialize constants:
-        epochs              = self.train_cfg.get('epochs', 1)
+        # compute epochs
+        if self.config.resume:
+            epochs = self.config.epochs - int(int(self.config.resume_path.split("-")[-1].split(".")[0])/len(self._train_loader))
+            print(f"Remaining epochs {epochs}")
+            self._steps = int(self.config.resume_path.split("-")[-1].split(".")[0])
+            print(f"Starting step {self._steps}")
+        else:
+            epochs = self.train_cfg.get('epochs', 1)
+            self._steps = 0
+        
         vlm_alpha           = self.train_cfg.get('vlm_alpha', 0.6)
         log_freq            = self.train_cfg.get('log_freq', 1000)
 
@@ -111,12 +121,15 @@ class Trainer:
         print(f"Training for {epochs} epochs train dataloader has length {len(self._train_loader)}, \
                 which sums to {epochs * len(self._train_loader)} total train steps, \
                 validation loader has length {len(self._val_loader)}")
+    
 
         for e in range(epochs):
             frac = e / epochs  
-            for inputs in self._train_loader:
+            
+            for i, inputs in tqdm(enumerate(self._train_loader), total=len(self._train_loader), leave=False):
+                
                 # Save stats
-                if (self._step % len(self._train_loader) == 0 )or (self._step == 0): # stats
+                if (self._step % len(self._train_loader) == 0 ): # stats
                     stats_save_name = join(self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
                     json.dump({k: str(v) for k, v in raw_stats.items()}, open(stats_save_name, 'w'))
                     
@@ -140,12 +153,12 @@ class Trainer:
                         
                         wandb.log(tolog)
                     
-                    if (self._step % len(self._train_loader) == 0) or (self._step==0):
+                    if (self._step % len(self._train_loader) == 0):
                         print('Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
                         print(train_print) 
 
                 ####---- Validation step ----####
-                if (self._step % len(self._train_loader) == 0) or (self._step==0):
+                if (self._step % len(self._train_loader) == 0):
                     # exhaust all data in val loader and take avg loss
                     all_val_losses = {task: defaultdict(list) for task in task_names}
                     val_iter = iter(self._val_loader)
@@ -174,7 +187,7 @@ class Trainer:
                             k: torch.mean(torch.stack(v)) for k, v in losses.items()}
                     
                     val_print = collect_stats(self._step, avg_losses, raw_stats, prefix='val')
-                    if (self._step % len(self._train_loader) == 0) or (self._step==0):
+                    if (self._step % len(self._train_loader) == 0):
                         print('Validation step {}:'.format(self._step))
                         print(val_print)
                     
@@ -196,12 +209,13 @@ class Trainer:
                     if self._step % self.train_cfg.target_update_freq == 0:
                         mod.soft_param_update()
 
-                if self._early_stopping.early_stop:
-                    print("Stop training for early-stopping")
+            if self._early_stopping.early_stop:
+                print("----Stop training for early-stopping----")
+                break
 
         ## when all epochs are done, save model one last time
         self.save_checkpoint(model, optimizer, weights_fn, save_fn)
-
+        
     def save_checkpoint(self, model, optimizer, weights_fn=None, save_fn=None):        
         if save_fn is not None:
             save_fn(self._save_fname, self._step)
@@ -274,10 +288,10 @@ class Workspace(object):
 
         print("Action model initialized to: {}".format(config.policy._target_))
         if resume:
-            rpath = join(cfg.save_path, cfg.resume_path) 
-            assert os.path.exists(rpath), "Can't seem to find {} anywhere".format(config.resume_path)
-            print('load model from ...%s' % rpath)
-            self.action_model.load_state_dict(torch.load(rpath, map_location=torch.device('cpu')))
+            self._rpath = join(cfg.save_path, cfg.resume_path) 
+            assert os.path.exists(self._rpath), "Can't seem to find {} anywhere".format(config.resume_path)
+            print('load model from ...%s' % self._rpath)
+            self.action_model.load_state_dict(torch.load(self._rpath, map_location=torch.device('cpu')))
         
         self.config = config
         self.train_cfg = config.train_cfg
@@ -285,9 +299,12 @@ class Workspace(object):
         ## move log path to here!
         print('\n Done initializing Workspace, saving config.yaml to directory: {}'.format(self.trainer.save_dir))
 
-        os.makedirs(self.trainer.save_dir, exist_ok=('burn' in self.trainer.save_dir))
-        os.makedirs(join(self.trainer.save_dir, 'stats'), exist_ok=True)
-         
+        try:
+            os.makedirs(self.trainer.save_dir, exist_ok=('burn' in self.trainer.save_dir))
+            os.makedirs(join(self.trainer.save_dir, 'stats'), exist_ok=True)
+        except:
+            pass
+
         save_config = copy.deepcopy(self.trainer.config)
         OmegaConf.save(config=save_config, f=join(self.trainer.save_dir, 'config.yaml'))
 

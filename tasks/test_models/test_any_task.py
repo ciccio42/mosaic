@@ -249,6 +249,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model')
     parser.add_argument('--wandb_log', action='store_true')
+    parser.add_argument('--project_name', '-pn', default="mosaic", type=str)
     parser.add_argument('--config', default='')
     parser.add_argument('--N', default=-1, type=int)
     parser.add_argument('--use_h', default=-1, type=int)
@@ -262,7 +263,6 @@ if __name__ == '__main__':
     parser.add_argument('--eval_subsets',  default=0, type=int)
     parser.add_argument('--saved_step', '-s', default=1000, type=int)
     parser.add_argument('--baseline', '-bline', default=None, type=str, help='baseline uses more frames at each test-time step')
-
 
     args = parser.parse_args()
     try_path = args.model
@@ -284,8 +284,7 @@ if __name__ == '__main__':
         if (args.size or args.shape or args.color):
             results_dir = os.path.join( os.path.dirname(model_path), \
                 'results_stack_size{}-shape{}-color-{}'.format(int(args.size), int(args.shape), int(args.color)) )
-    
-    
+        
     assert args.env != '', 'Must specify correct task to evaluate'
     os.makedirs(results_dir, exist_ok=True)
     model_saved_step = model_path.split("/")[-1].split("-")
@@ -302,6 +301,12 @@ if __name__ == '__main__':
 
     model = hydra.utils.instantiate(config.policy)
     
+    if args.wandb_log:
+        model_name = model_path.split("/")[-2]
+        run = wandb.init(project=args.project_name, job_type='test', group=model_name)
+        run.name = model_name + f'-Test_{args.env}-Step_{model_saved_step}' 
+        wandb.config.update(args)
+       
     # assert torch.cuda.device_count() <= 5, "Let's restrict visible GPUs to not hurt other processes. E.g. export CUDA_VISIBLE_DEVICES=0,1"
     build_task = TASK_MAP.get(args.env, None)
     assert build_task, 'Got unsupported task '+args.env
@@ -356,11 +361,7 @@ if __name__ == '__main__':
         task_success_flags = [f(n) for n in range(args.N)]
 
     if args.wandb_log:
-        model_name = model_path.split("/")[-2]
-        run = wandb.init(project='mosaic', job_type='test', group=model_name)
-        run.name = model_name + f'-Test_{args.env}-Step_{model_saved_step}' 
 
-        wandb.config.update(args)
         for i, t in enumerate(task_success_flags):
             wandb.log({
                 'episode': i, 
