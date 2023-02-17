@@ -22,7 +22,7 @@ class DiscreteMixLogistic(torch.distributions.Distribution):
         assert mean.device == log_scale.device and mean.device == logit_probs.device, "all tensors must lie on same device!"
         batch_shape = log_scale.shape[:-1]
         event_shape = mean.shape[len(batch_shape)+1:]
-        super().__init__(batch_shape, event_shape, None)
+        super().__init__(batch_shape, event_shape, False)
         self._mean = mean
         self._log_scale = log_scale
         self._logit_probs = logit_probs

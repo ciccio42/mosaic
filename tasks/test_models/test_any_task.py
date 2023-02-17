@@ -223,7 +223,7 @@ def rollout_imitation(model, config, ctr,
     eval_fn = build_task['eval_fn']
     traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
     print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
-    return traj, info, expert_traj
+    return traj, info, expert_traj, context
 
 def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, n):
     json_name = results_dir + '/traj{}.json'.format(n)
@@ -234,11 +234,12 @@ def _proc(model, config, results_dir, heights, widths, size, shape, color, env_n
         print("Using previous results at {}. Loaded eval traj #{}, task#{}, reached? {} picked? {} success? {} ".format( 
             json_name, n, task_success_flags['variation_id'], task_success_flags['reached'], task_success_flags['picked'], task_success_flags['success']))
     else:
-        rollout, task_success_flags, expert_traj = rollout_imitation(
+        rollout, task_success_flags, expert_traj, context = rollout_imitation(
             model, config, n, heights, widths, size, shape, color, 
             max_T=60, env_name=env_name, baseline=baseline)
         pkl.dump(rollout, open(results_dir+'/traj{}.pkl'.format(n), 'wb'))
         pkl.dump(expert_traj, open(results_dir+'/demo{}.pkl'.format(n), 'wb'))
+        pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb'))
         json.dump({k: int(v) for k, v in task_success_flags.items()}, open(results_dir+'/traj{}.json'.format(n), 'w'))
     del model
     return task_success_flags
@@ -263,8 +264,17 @@ if __name__ == '__main__':
     parser.add_argument('--eval_subsets',  default=0, type=int)
     parser.add_argument('--saved_step', '-s', default=1000, type=int)
     parser.add_argument('--baseline', '-bline', default=None, type=str, help='baseline uses more frames at each test-time step')
-
+    parser.add_argument('--debug', action='store_true')
+    
     args = parser.parse_args()
+    
+    if args.debug:
+        import debugpy
+        debugpy.listen(('0.0.0.0', 5678))
+        print("Waiting for debugger attach")
+        debugpy.wait_for_client()
+
+    
     try_path = args.model
     if 'log' not in args.model and 'mosaic' not in args.model:
         print("Appending dir to given exp_name: ", args.model)
