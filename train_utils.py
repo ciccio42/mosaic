@@ -31,6 +31,22 @@ def loss_to_scalar(loss):
     x = loss.item()
     return float("{:.5f}".format(x))
 
+def check_train_val_overlap(train_dataset, val_dataset):
+    same_agent_file_cnt = 0
+    same_demo_file_cnt = 0
+    for task in train_dataset.agent_files.keys():
+        for id in train_dataset.agent_files[task].keys():
+            for agent_trj in train_dataset.agent_files[task][id]:
+                if agent_trj in val_dataset.agent_files[task][id]:
+                    same_agent_file_cnt += 1
+    
+    for task in train_dataset.demo_files.keys():
+        for id in train_dataset.demo_files[task].keys():
+            for demo_trj in train_dataset.demo_files[task][id]:
+                if demo_trj in val_dataset.demo_files[task][id]:
+                    same_demo_file_cnt += 1
+    print(f"Overlapping counter {same_agent_file_cnt} - {same_demo_file_cnt}")
+
 def make_data_loaders(config, dataset_cfg):
     """ Use .yaml cfg to create both train and val dataloaders """
     assert '_target_' in dataset_cfg.keys(), "Let's use hydra-config from now on. "
@@ -69,6 +85,8 @@ def make_data_loaders(config, dataset_cfg):
         worker_init_fn=lambda w: np.random.seed(np.random.randint(2 ** 29) + w),
         collate_fn=collate_by_task
         )
+
+    check_train_val_overlap(train_dataset=dataset, val_dataset=val_dataset)
     return train_loader, val_loader
 
 def collect_stats(step, task_losses, raw_stats, prefix='train'):

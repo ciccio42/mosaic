@@ -28,7 +28,7 @@ class DiscreteMixLogistic(torch.distributions.Distribution):
         self._logit_probs = logit_probs
         self._num_classes = num_classes
         self._log_scale_min = log_scale_min
-        self.arg_constraints = arg_constraints
+        self._arg_constraints = arg_constraints
 
     def log_prob(self, value):
         # reshape value to match convention

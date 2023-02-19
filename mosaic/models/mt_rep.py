@@ -409,6 +409,7 @@ class VideoImitation(nn.Module):
         out['bc_distrib']       = DiscreteMixLogistic(mu_bc, scale_bc, logit_bc) \
             if ret_dist else (mu_bc, scale_bc, logit_bc)
         out['demo_embed']       = demo_embed
+        out['img_embed'] = img_embed
         ## multi-head case? maybe register a name for each action head
         return out
 

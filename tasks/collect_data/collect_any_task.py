@@ -150,7 +150,12 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
     assert args.num_workers > 0, "num_workers must be positive!"
-
+    
+    import debugpy
+    debugpy.listen(('0.0.0.0', 5678))
+    print("Waiting for debugger attach")
+    debugpy.wait_for_client()
+    
     if args.random_seed:
         assert args.n_env is None
         seeds = [None for _ in range(args.N)]

@@ -15,6 +15,7 @@ from collections import defaultdict, OrderedDict
 import glob 
 import numpy as np 
 import matplotlib.pyplot as plt
+from copy import deepcopy
 
 JITTER_FACTORS = {'brightness': 0.4, 'contrast': 0.4, 'saturation': 0.4, 'hue': 0.1} 
 
@@ -93,9 +94,13 @@ class MultiTaskPairedDataset(Dataset):
         count               = 0
         self.task_to_idx    = defaultdict(list)
         self.subtask_to_idx = OrderedDict()
+        self.agent_files = dict()
+        self.demo_files = dict()
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
+            self.agent_files[name]=dict()
+            self.demo_files[name]=dict()
             if mode == 'train':
                 print("Loading task [{:<9}] saved on date {}".format(name, date))
             if date is None:
@@ -133,6 +138,8 @@ class MultiTaskPairedDataset(Dataset):
                 # assert len(agent_files) == len(demo_files), \
                 #     'data for task {}, subtask #{} is not matched'.format(name, task_id)
 
+                self.agent_files[name][_id] = deepcopy(agent_files)
+                self.demo_files[name][_id] = deepcopy(demo_files)
                 for demo in demo_files:
                     for agent in agent_files:
                         self.all_file_pairs[count] = (name, _id, demo, agent)
