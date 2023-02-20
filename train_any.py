@@ -125,9 +125,10 @@ class Trainer:
 
         for e in range(epochs):
             frac = e / epochs  
-            
+
             for i, inputs in tqdm(enumerate(self._train_loader), total=len(self._train_loader), leave=False):
-                
+                tolog = {}
+
                 # Save stats
                 if (self._step % len(self._train_loader) == 0 ): # stats
                     stats_save_name = join(self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
@@ -145,13 +146,12 @@ class Trainer:
                 if self._step % log_freq == 0:
                     train_print = collect_stats(self._step, task_losses, raw_stats, prefix='train')   
                     if self.config.wandb_log:
-                        tolog = {'Train Step': self._step}
+                        tolog['Train Step'] = self._step
                         for task_name, losses in task_losses.items():
                             for loss_name, loss_val in losses.items():
                                 tolog[f'train/{loss_name}/{task_name}'] = loss_val
                                 tolog[f'train/{task_name}/{loss_name}'] = loss_val
                         
-                        wandb.log(tolog)
                     
                     if (self._step % len(self._train_loader) == 0):
                         print('Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
@@ -173,19 +173,20 @@ class Trainer:
                         for task, losses in val_task_losses.items():
                             for k, v in losses.items():
                                 all_val_losses[task][k].append(v)
-                    if self.config.wandb_log:
-                        tolog = {'Validation Step': self._step}
-                        for task_name, losses in val_task_losses.items():
-                            for loss_name, loss_val in losses.items():
-                                tolog[f'val/{loss_name}/{task_name}'] = loss_val
-                                tolog[f'val/{task_name}/{loss_name}'] = loss_val
-                        wandb.log(tolog)
+
                     # take average across all batches in the val loader 
                     avg_losses = dict()
                     for task, losses in all_val_losses.items():
                         avg_losses[task] = {
                             k: torch.mean(torch.stack(v)) for k, v in losses.items()}
                     
+                    if self.config.wandb_log:
+                        tolog['Validation Step'] = self._step
+                        for task_name, losses in avg_losses.items():
+                            for loss_name, loss_val in losses.items():
+                                tolog[f'val/{loss_name}/{task_name}'] = loss_val
+                                tolog[f'val/{task_name}/{loss_name}'] = loss_val
+                        
                     val_print = collect_stats(self._step, avg_losses, raw_stats, prefix='val')
                     if (self._step % len(self._train_loader) == 0):
                         print('Validation step {}:'.format(self._step))
@@ -201,6 +202,9 @@ class Trainer:
                     if self._early_stopping.early_stop:
                         break
                 
+                if self.config.wandb_log:
+                        wandb.log(tolog)
+
                 self._step += 1
                 # update target params
                 mod = model.module if isinstance(model, nn.DataParallel) else model
