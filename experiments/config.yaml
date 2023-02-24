@@ -1,5 +1,5 @@
-debug: False
-save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+debug: True
+save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1-state-conc
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -22,8 +22,8 @@ rep_muls:
   simclr_post:        ${simclr.mul_pos}
   simclr_intm:        ${simclr.mul_intm}
 
-wandb_log: True 
-project_name: mosaic_baseline_1
+wandb_log: False 
+project_name: mosaic_baseline_1_with_state_concatenation
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
@@ -132,8 +132,8 @@ policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}
 mosaic:
   _target_:           mosaic.models.mt_rep.VideoImitation 
   latent_dim:         40
-  sdim:               9
-  concat_state:       False
+  sdim:               8
+  concat_state:       True #False
   height:             ${train_cfg.dataset.height}
   width:              ${train_cfg.dataset.width} 
   demo_T:             ${train_cfg.dataset.demo_T}

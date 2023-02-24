@@ -381,9 +381,13 @@ if __name__ == '__main__':
                 'variation': int(t['variation_id']),
             })
         all_succ_flags = [t['success'] for t in task_success_flags]
+        all_reached_flags = [t['reached'] for t in task_success_flags]
+        all_picked_flags = [t['picked'] for t in task_success_flags]
 
         wandb.log({
             'avg_success': np.mean(all_succ_flags),
+            'avg_reached': np.mean(all_reached_flags),
+            'avg_picked': np.mean(all_picked_flags),
             'success_err': np.mean(all_succ_flags) / np.sqrt(args.N),
             })
 
