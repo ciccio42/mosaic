@@ -19,6 +19,7 @@ from robosuite.utils import RandomizationError
 import torch
 import os
 import mujoco_py
+import robosuite.utils.transform_utils as T
 # in case rebuild is needed to use GPU render: sudo mkdir -p /usr/lib/nvidia-000
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-000
 # pip uninstall mujoco_py; pip install mujoco_py 
@@ -38,11 +39,14 @@ class BlockStackingController:
         self.reset()
         self.ranges = ranges
 
-    def _calculate_quat(self, angle):
-        if "Sawyer" in self._env.robot_names:
-            new_rot = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
-            return Quaternion(matrix=self._base_rot.dot(new_rot))
-        return self._base_quat
+    def _calculate_quat(self, obs):
+        # Compute target quaternion that defines the final desired gripper orientation
+        # 1. Obtain the orientation of the object wrt to world
+        obj_quat = obs['{}_quat'.format('cubeB')]
+        obj_rot = T.quat2mat(obj_quat)
+        # 2. compute the new gripper orientation with respect to the gripper
+        world_ee_rot = np.matmul(obj_rot, self._target_gripper_wrt_obj_rot)
+        return Quaternion(matrix=world_ee_rot)
 
     def _get_target(self):
         return self._env.sim.data.body_xpos[self._env.cubeB_body_id] + [0, 0, 0.09]
@@ -54,14 +58,14 @@ class BlockStackingController:
             self._obs_name = 'eef_pos'
             self._default_speed = 0.13
             self._final_thresh = 1e-2
-            self._base_rot = np.array([[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=self._base_rot)
+            self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
+            self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
         elif "Panda" in self._env.robot_names:
             self._obs_name = 'eef_pos'
             self._default_speed = 0.13
             self._final_thresh = 1e-2
-            self._base_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=self._base_rot)
+            self._target_gripper_wrt_obj_rot = np.array([[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
+            self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
         else:
             raise NotImplementedError
 
@@ -110,7 +114,7 @@ class BlockStackingController:
                 pdb.set_trace()
             
             angle = np.arctan2(y, x)
-            self._target_quat = self._calculate_quat(angle)
+            self._target_quat = self._calculate_quat(obs)
 
         if self._start_grasp < 0 and self._t < 15:
             if np.linalg.norm(obs['cubeA_pos'] - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol or self._t == 14:
@@ -248,5 +252,7 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
 
 if __name__ == '__main__':
     config = load_controller_config(default_controller='IK_POSE')
-    traj = get_expert_trajectory('PandaBlockStacking', config, renderer=True, camera_obs=False, task=2, size=False, shape=False, color=False,
+    for i in range(6):
+        traj = get_expert_trajectory('SawyerBlockStacking', config, renderer=True, 
+        camera_obs=False, task=i, size=False, shape=False, color=False,
                                  render_camera='agentview')
