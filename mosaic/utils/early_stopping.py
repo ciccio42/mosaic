@@ -40,7 +40,7 @@ class EarlyStopping:
         elif score < self.best_score + self.delta:
             self.counter += 1
             self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
-            if self.counter >= self.patience:
+            if (self.patience > -1) and (self.counter >= self.patience) :
                 self.early_stop = True
         # the score is higher than the previous one
         else:
