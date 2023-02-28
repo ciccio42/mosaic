@@ -1,5 +1,8 @@
-debug: True
-save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1-state-conc
+debug: False
+EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
+save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+wandb_log: True 
+project_name: mosaic_baseline_1_stable_policy
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -9,6 +12,7 @@ exp_name:       -1
 epochs:         10
 bsize:          30
 vsize:          ${bsize} # optionally, set to a different batchsize for validation loader
+task_names: None
 # imitation loss multipliers
 inv_mul:        1
 bc_mul:         1
@@ -22,8 +26,6 @@ rep_muls:
   simclr_post:        ${simclr.mul_pos}
   simclr_intm:        ${simclr.mul_intm}
 
-wandb_log: False 
-project_name: mosaic_baseline_1_with_state_concatenation
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
@@ -43,7 +45,7 @@ train_cfg:
 
 # early stopping configurator
 early_stopping_cfg:
-  patience: -1
+  patience: 10
   delta: 1e-3
 
 # tasks related
@@ -56,7 +58,6 @@ limit_num_traj: -1
 limit_num_demo: -1
 defaults:
   - tasks_cfgs:  7_tasks
-EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
 
 # dataset/loader/samplers
 loader_workers:     4 
@@ -132,8 +133,8 @@ policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}
 mosaic:
   _target_:           mosaic.models.mt_rep.VideoImitation 
   latent_dim:         40
-  sdim:               8
-  concat_state:       True #False
+  sdim:               9
+  concat_state:       False
   height:             ${train_cfg.dataset.height}
   width:              ${train_cfg.dataset.width} 
   demo_T:             ${train_cfg.dataset.demo_T}

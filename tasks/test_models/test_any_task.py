@@ -159,7 +159,7 @@ def build_tvf_formatter(config, env_name='stack'):
     return resize_crop 
 
 def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut', 
-    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, ):
+    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, variation=None):
     create_seed = random.Random(None)
     create_seed = create_seed.getrandbits(32)
     controller = load_controller_config(default_controller='IK_POSE')
@@ -170,7 +170,11 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     env_fn = build_task['env_fn']
     agent_name, teacher_name = build_task['agent-teacher']
 
-    variation = ctr % div
+    if variation == None:
+        variation = ctr % div
+    else:
+        variation = variation
+
     if 'Stack' in teacher_name:
         teacher_expert_rollout = env_fn( teacher_name, \
             controller_type=controller, task=variation, size=size, shape=shape, color=color, \
@@ -201,7 +205,7 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     return agent_env, context, variation, teacher_expert_rollout
 
 def rollout_imitation(model, config, ctr, 
-    heights=100, widths=200, size=0, shape=0, color=0, max_T=60, env_name='place', gpu_id=-1, baseline=None):
+    heights=100, widths=200, size=0, shape=0, color=0, max_T=60, env_name='place', gpu_id=-1, baseline=None, variation=None):
     if gpu_id == -1:
         gpu_id = int(ctr % torch.cuda.device_count())
     model = model.cuda(gpu_id)
@@ -216,7 +220,7 @@ def rollout_imitation(model, config, ctr,
     env, context, variation_id, expert_traj = build_env_context(
         img_formatter,
         T_context=T_context, ctr=ctr, env_name=env_name, 
-        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id)
+        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id, variation=variation)
     
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name
@@ -225,7 +229,7 @@ def rollout_imitation(model, config, ctr,
     print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
     return traj, info, expert_traj, context
 
-def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, n):
+def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, variation, n):
     json_name = results_dir + '/traj{}.json'.format(n)
     pkl_name  = results_dir + '/traj{}.pkl'.format(n)
     if os.path.exists(json_name) and os.path.exists(pkl_name):
@@ -236,7 +240,7 @@ def _proc(model, config, results_dir, heights, widths, size, shape, color, env_n
     else:
         rollout, task_success_flags, expert_traj, context = rollout_imitation(
             model, config, n, heights, widths, size, shape, color, 
-            max_T=60, env_name=env_name, baseline=baseline)
+            max_T=60, env_name=env_name, baseline=baseline, variation=variation)
         pkl.dump(rollout, open(results_dir+'/traj{}.pkl'.format(n), 'wb'))
         pkl.dump(expert_traj, open(results_dir+'/demo{}.pkl'.format(n), 'wb'))
         pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb')) 
@@ -265,7 +269,9 @@ if __name__ == '__main__':
     parser.add_argument('--saved_step', '-s', default=1000, type=int)
     parser.add_argument('--baseline', '-bline', default=None, type=str, help='baseline uses more frames at each test-time step')
     parser.add_argument('--debug', action='store_true')
-    
+    parser.add_argument('--results_name', default=None, type=str)
+    parser.add_argument('--variation', default=None, type=int)
+
     args = parser.parse_args()
     
     if args.debug:
@@ -288,8 +294,13 @@ if __name__ == '__main__':
     model_path = os.path.expanduser(try_path)
     
     assert args.env in TASK_MAP.keys(), "Got unsupported environment {}".format(args.env)
-    results_dir = os.path.join(
-        os.path.dirname(model_path), 'results_{}/'.format(args.env))
+    
+    if args.variation:
+        results_dir = os.path.join(
+            os.path.dirname(model_path), 'results_{}_{}/'.format(args.env, args.variation))
+    else:
+        results_dir = os.path.join( os.path.dirname(model_path), 'results_{}/'.format(args.env))
+    
     if args.env == 'stack_block':
         if (args.size or args.shape or args.color):
             results_dir = os.path.join( os.path.dirname(model_path), \
@@ -360,9 +371,11 @@ if __name__ == '__main__':
     size = args.size
     shape = args.shape
     color = args.color
+    variation = args.variation
 
     parallel = args.num_workers > 1
-    f = functools.partial(_proc, model, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline)
+    # model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, n, variation
+    f = functools.partial(_proc, model, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline, variation)
 
     if parallel:
         with Pool(args.num_workers) as p:

@@ -96,6 +96,7 @@ class MultiTaskPairedDataset(Dataset):
         self.subtask_to_idx = OrderedDict()
         self.agent_files = dict()
         self.demo_files = dict()
+        self.mode = mode
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
@@ -230,6 +231,9 @@ class MultiTaskPairedDataset(Dataset):
     def __getitem__(self, idx):
         """since the data is organized by task, use a mapping here to convert
         an index to a proper sub-task index """
+        if self.mode == 'train':
+            print("Train")
+            pass
         (task_name, sub_task_id, demo_file, agent_file) = self.all_file_pairs[idx]
         # print("getting idx", idx, task_name, sub_task_id)
         demo_traj, agent_traj = load_traj(demo_file), load_traj(agent_file)

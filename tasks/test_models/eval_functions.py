@@ -34,7 +34,7 @@ def get_action(model, states, images, context, gpu_id, n_steps, max_T=80, baseli
         with torch.no_grad():
             out = model(states=s_t, images=i_t, context=context, eval=True) # to avoid computing ATC loss
             action = out['bc_distrib'].sample()[0, -1].cpu().numpy()
-    action[3:7] = [1.0, 1.0, 0.0, 0.0]
+    #action[3:7] = [1.0, 1.0, 0.0, 0.0]
     action[-1] = 1 if action[-1] > 0 and n_steps < max_T - 1 else -1
     return action 
 

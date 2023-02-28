@@ -28,7 +28,10 @@ class Trainer:
         self._device_list = None
         self._allow_val_grad = allow_val_grad 
         # set of file saving
-        assert os.path.exists(self.config.save_path), "Warning! Save path {} doesn't exist".format(self.config.save_path)
+        
+        if not os.path.exists(self.config.save_path):
+            os.makedirs(self.config.save_path)
+        
         assert self.config.exp_name != -1, 'Specify an experiment name for log data!'
         self._best_validation_loss = float('inf')
         self._best_validation_weights = None
@@ -332,8 +335,8 @@ def main(cfg):
     from train_any import Workspace as W
     all_tasks_cfgs = [cfg.tasks_cfgs.nut_assembly, cfg.tasks_cfgs.door, cfg.tasks_cfgs.drawer, cfg.tasks_cfgs.button, cfg.tasks_cfgs.pick_place, cfg.tasks_cfgs.stack_block, cfg.tasks_cfgs.basketball]
     
-    if cfg.single_task:
-        cfg.tasks = [tsk for tsk in all_tasks_cfgs if tsk.name == cfg.single_task]
+    if cfg.task_names:
+        cfg.tasks = [tsk for tsk in all_tasks_cfgs if tsk.name in cfg.task_names]
     
     if cfg.use_all_tasks:
         print("Loading all 7 tasks to the dataset!  obs_T: {} demo_T: {}".format(\
