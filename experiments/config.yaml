@@ -2,7 +2,7 @@ debug: False
 EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
 save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
 wandb_log: True 
-project_name: mosaic_baseline_1_stable_policy
+project_name: mosaic_baseline_balanced_batch
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -12,6 +12,7 @@ exp_name:       -1
 epochs:         10
 bsize:          30
 vsize:          ${bsize} # optionally, set to a different batchsize for validation loader
+optimizer:      RMSProp #Adam
 task_names: None
 # imitation loss multipliers
 inv_mul:        1
@@ -29,7 +30,8 @@ rep_muls:
 train_cfg:
   batch_size:           ${bsize}
   val_size:             ${vsize}
-  lr:                   5e-4
+  lr:                   1e-3 #5e-4
+  optimizer:            ${optimizer}
   epochs:               ${epochs}
   log_freq:             ${log_freq}
   save_freq:            ${save_freq}
@@ -45,7 +47,7 @@ train_cfg:
 
 # early stopping configurator
 early_stopping_cfg:
-  patience: 10
+  patience: -1
   delta: 1e-3
 
 # tasks related
@@ -65,6 +67,8 @@ samplers:
   batch_size:         ${bsize}
   drop_last:          False
   shuffle:            True 
+  # Policy 1: At each slot is assigned a RandomSampler
+  balancing_policy: 1 # 0, 1, 2 
 val_skip:             False # whether to let the samplers skip some **sub**tasks
 train_skip:           True
 
@@ -86,6 +90,8 @@ dataset_cfg:
   allow_val_skip:   ${val_skip}
   allow_train_skip: ${train_skip}
   use_strong_augs:  True 
+  select_random_frames: True
+  compute_obj_distribution: True
 
 augs:
   strong_jitter:     0.01    
@@ -175,8 +181,8 @@ attn:
   img_cfg:           
     network_flag:   0 # e.g Res18  
     out_feature:    256
-    drop_dim:       3 
-    pretrained:     False 
+    drop_dim:       3
+    pretrained:     True 
 
 tosil:
   _target_:         mosaic.models.baselines.InverseImitation 

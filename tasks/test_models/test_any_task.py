@@ -108,26 +108,59 @@ TASK_MAP = {
 
     }
 
-def select_random_frames(frames, n_select, sample_sides=True):
+def select_random_frames(frames, n_select, sample_sides=True, random_frames=True):
     selected_frames = []
     clip = lambda x : int(max(0, min(x, len(frames) - 1)))
     per_bracket = max(len(frames) / n_select, 1)
 
-    for i in range(n_select):
-        n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
-        if sample_sides and i == n_select - 1:
-            n = len(frames) - 1
-        elif sample_sides and i == 0:
-            n = 0
-        selected_frames.append(n)
-
+    if random_frames:
+        for i in range(n_select):
+            n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
+            if sample_sides and i == n_select - 1:
+                n = len(frames) - 1
+            elif sample_sides and i == 0:
+                n = 0
+            selected_frames.append(n)
+    else:
+         for i in range(n_select):
+            # get first frame
+            if i == 0:
+                n = 0
+            # get the last frame
+            elif i == n_select - 1:
+                n = len(frames) - 1
+            elif i == 1:
+                obj_in_hand = 0
+                # get the first frame with obj_in_hand and the gripper is closed
+                for t in range(1, len(frames)):
+                    state = frames.get(t)['info']['status']
+                    trj_t = frames.get(t)
+                    gripper_act = trj_t['action'][-1] 
+                    if state == 'obj_in_hand' and gripper_act == 1:
+                        obj_in_hand = t
+                        n = t
+                        break
+            elif i == 2:
+                # get the middle moving frame
+                start_moving = 0
+                end_moving = 0
+                for t in range(obj_in_hand, len(frames)):
+                    state = frames.get(t)['info']['status']
+                    if state == 'moving' and start_moving == 0:
+                        start_moving = t
+                    elif state != 'moving' and start_moving != 0 and end_moving == 0:
+                        end_moving = t
+                        break
+                n = start_moving + int((end_moving-start_moving)/2)
+            selected_frames.append(n)
+    
     if isinstance(frames, (list, tuple)):
         return [frames[i] for i in selected_frames]
     elif isinstance(frames, Trajectory):
         return [frames[i]['obs']['image'] for i in selected_frames]
         #return [frames[i]['obs']['image-state'] for i in selected_frames]
     return frames[selected_frames]
-
+       
 def build_tvf_formatter(config, env_name='stack'):
     """Use this for torchvision.transforms in multi-task dataset, 
     note eval_fn always feeds in traj['obs']['images'], i.e. shape (h,w,3)
@@ -159,7 +192,7 @@ def build_tvf_formatter(config, env_name='stack'):
     return resize_crop 
 
 def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut', 
-    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, variation=None):
+    heights=100, widths=200, size=False, shape=False, color=False, gpu_id=0, variation=None, random_frames=True):
     create_seed = random.Random(None)
     create_seed = create_seed.getrandbits(32)
     controller = load_controller_config(default_controller='IK_POSE')
@@ -193,7 +226,7 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
              heights=heights, widths=widths, gpu_id=gpu_id)
     
     assert isinstance(teacher_expert_rollout, Trajectory)
-    context = select_random_frames(teacher_expert_rollout, T_context, sample_sides=True)
+    context = select_random_frames(teacher_expert_rollout, T_context, sample_sides=True, random_frames=random_frames)
     context = [img_formatter(i)[None] for i in context]
     # assert len(context ) == 6
     if isinstance(context[0], np.ndarray):
@@ -213,6 +246,7 @@ def rollout_imitation(model, config, ctr,
     img_formatter = build_tvf_formatter(config, env_name)
      
     T_context = config.train_cfg.dataset.get('T_context', None)
+    random_frames = config.dataset_cfg.get('select_random_frames', False)
     if not T_context:
         assert 'multi' in config.train_cfg.dataset._target_, config.train_cfg.dataset._target_
         T_context = config.train_cfg.dataset.demo_T
@@ -220,7 +254,7 @@ def rollout_imitation(model, config, ctr,
     env, context, variation_id, expert_traj = build_env_context(
         img_formatter,
         T_context=T_context, ctr=ctr, env_name=env_name, 
-        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id, variation=variation)
+        heights=heights, widths=widths, size=size, shape=shape, color=color, gpu_id=gpu_id, variation=variation, random_frames=random_frames)
     
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name

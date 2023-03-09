@@ -513,14 +513,14 @@ class VideoImitation(nn.Module):
         self._inv_model = None
         self._target_embed = None
 
-    def pretrain_img_encoder(self):
-        """Freeze everything except for the image encoder + attention layers"""
-        count = 0
-        for p in zip(
-            self._action_module.parameters(),
-            self._inv_model.parameters(),
-            self._embed._linear_embed.parameters()
-            ):
-            p.requires_grad = False
-            count += np.prod(p.shape)
-        print("Freezing action, inv, linear embed {} layer parameters".format(count))
+    # def pretrain_img_encoder(self):
+    #     """Freeze everything except for the image encoder + attention layers"""
+    #     count = 0
+    #     for p in zip(
+    #         self._action_module.parameters(),
+    #         self._inv_model.parameters(),
+    #         self._embed._linear_embed.parameters()
+    #         ):
+    #         p.requires_grad = False
+    #         count += np.prod(p.shape)
+    #     print("Freezing action, inv, linear embed {} layer parameters".format(count))

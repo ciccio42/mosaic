@@ -31,8 +31,12 @@ def denormalize_action(norm_action, base_pos, base_quat, ranges):
         euler = T.mat2euler(R_ee_new_ee)
         aa = T.quat2axisangle(T.mat2quat(T.euler2mat(euler)))
         return np.concatenate((action[:3] - base_pos, aa, action[7:]))
-
-       
+        # cmd_quat = Quaternion(angle=action[3] * np.pi, axis=action[4:7])
+        # cmd_quat = np.array([cmd_quat.x, cmd_quat.y, cmd_quat.z, cmd_quat.w])
+        # quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
+        # aa = T.quat2axisangle(quat)
+        # return np.concatenate((action[:3] - base_pos, aa, action[7:]))
+        
 
 def get_rel_action(action, base_pos, base_quat):
     if action.shape[0] == 7:
@@ -113,6 +117,7 @@ class CustomIKWrapper(Wrapper):
         for _ in range(self.action_repeat):
             base_pos = self.env.sim.data.site_xpos[self.env.robots[0].eef_site_id]
             base_quat = T.mat2quat(np.reshape(self.env.sim.data.site_xmat[self.env.robots[0].eef_site_id], (3,3)))
+            # base_quat = self.env._eef_xquat
             rel_action = denormalize_action(action, base_pos, base_quat, self.ranges)
             obs, reward_t, done, info = self.env.step(rel_action)
             reward = max(reward, reward_t)

@@ -3,7 +3,7 @@ import torch
 from os.path import join, expanduser
 from mosaic.datasets import load_traj, split_files
 
-from torch.utils.data import Dataset, Sampler, SubsetRandomSampler, RandomSampler
+from torch.utils.data import Dataset, Sampler, SubsetRandomSampler, RandomSampler, WeightedRandomSampler
 from torch.utils.data._utils.collate import default_collate
 from torchvision import transforms
 from torchvision.transforms import RandomAffine, ToTensor, Normalize, \
@@ -16,6 +16,19 @@ import glob
 import numpy as np 
 import matplotlib.pyplot as plt
 from copy import deepcopy
+from functools import reduce
+from operator import concat
+
+ENV_OBJECTS = {
+    'pick_place':{
+        'obj_names': ['milk', 'bread', 'cereal', 'can'],
+        'ranges':  [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+    },
+    'nut_assembly':{
+        'obj_names': ['nut0', 'nut1', 'nut2'],        
+        'ranges': [[0.10, 0.31], [-0.10, 0.10], [-0.31, -0.10]]
+    }
+}
 
 JITTER_FACTORS = {'brightness': 0.4, 'contrast': 0.4, 'saturation': 0.4, 'hue': 0.1} 
 
@@ -51,6 +64,9 @@ class MultiTaskPairedDataset(Dataset):
         allow_train_skip=False,
         use_strong_augs=False,
         aux_pose=False,
+        select_random_frames=True,
+        balance_target_obj_pos=True,
+        compute_obj_distribution=False,
         **params):
         """
         Args:
@@ -97,11 +113,22 @@ class MultiTaskPairedDataset(Dataset):
         self.agent_files = dict()
         self.demo_files = dict()
         self.mode = mode
+        
+        self.select_random_frames = select_random_frames
+        self.balance_target_obj_pos = balance_target_obj_pos
+        self.compute_obj_distribution = compute_obj_distribution
+        self.object_distribution = OrderedDict()
+        self.object_distribution_to_indx = OrderedDict()        
+        
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
             self.agent_files[name]=dict()
             self.demo_files[name]=dict()
+
+            self.object_distribution[name]=OrderedDict()
+            self.object_distribution_to_indx[name]=OrderedDict()
+            
             if mode == 'train':
                 print("Loading task [{:<9}] saved on date {}".format(name, date))
             if date is None:
@@ -141,13 +168,57 @@ class MultiTaskPairedDataset(Dataset):
 
                 self.agent_files[name][_id] = deepcopy(agent_files)
                 self.demo_files[name][_id] = deepcopy(demo_files)
+
+                self.object_distribution[name][task_id] = OrderedDict()
+                self.object_distribution_to_indx[name][task_id] = [[] for i in range(len(ENV_OBJECTS[name]['ranges']))]
+                if self.compute_obj_distribution and self.mode=='train':
+                    # for each subtask, create a dict with the object name
+                    # assign the slot at each file
+                    for agent in agent_files:
+                        # compute object distribution if requested
+                        if self.compute_obj_distribution:
+                            # load pickle file
+                            with open(agent, "rb") as f:
+                                agent_file_data = pkl.load(f)
+                            # take trj
+                            trj = agent_file_data['traj']
+                            # take target object id
+                            target_obj_id = trj[1]['obs']['target-object']
+                            for id, obj_name in enumerate(ENV_OBJECTS[name]['obj_names']):
+                                if id == target_obj_id:
+                                    if obj_name not in self.object_distribution[name][task_id]:
+                                        self.object_distribution[name][task_id][obj_name] = OrderedDict()
+                                    # get object position
+                                    if name == 'nut_assembly':
+                                        if id == 0:
+                                            pos = trj[1]['obs']['round-nut_pos']
+                                        else:
+                                            pos = trj[1]['obs'][f'round-nut-{id+1}_pos']
+                                    else:
+                                        pos = trj[1]['obs'][f'{obj_name}_pos']        
+                                    for i, pos_range in enumerate(ENV_OBJECTS[name]["ranges"]):
+                                        if pos[1] >= pos_range[0] and pos[1] <= pos_range[1]: 
+                                            self.object_distribution[name][task_id][obj_name][agent]=i
+                                            break
+                                    break
+
                 for demo in demo_files:
                     for agent in agent_files:
                         self.all_file_pairs[count] = (name, _id, demo, agent)
                         self.task_to_idx[name].append(count)
                         self.subtask_to_idx[name][task_id].append(count)
+                        if self.compute_obj_distribution and self.mode=='train':
+                            # take objs for the current task_id
+                            for obj in self.object_distribution[name][task_id].keys():
+                                # take the slot for the given agent file
+                                if agent in self.object_distribution[name][task_id][obj]:
+                                    slot_indx = self.object_distribution[name][task_id][obj][agent]
+                                    # assign the slot for the given agent file
+                                    self.object_distribution_to_indx[name][task_id][slot_indx].append(count)
                         count += 1
-            self.task_crops[name] = spec.get('crop', [0,0,0,0])
+        
+            self.task_crops[name] = spec.get('crop', [0,0,0,0])    
+        
         print('Done loading Task {}, agent/demo trajctores pairs reach a count of: {}'.format(name, count))
         self.pairs_count = count
         self.task_count = len(tasks_spec)
@@ -232,13 +303,9 @@ class MultiTaskPairedDataset(Dataset):
         """since the data is organized by task, use a mapping here to convert
         an index to a proper sub-task index """
         if self.mode == 'train':
-            print("Train")
             pass
         (task_name, sub_task_id, demo_file, agent_file) = self.all_file_pairs[idx]
-        # print("getting idx", idx, task_name, sub_task_id)
         demo_traj, agent_traj = load_traj(demo_file), load_traj(agent_file)
-        #assert (len(demo_traj) > 10 and len(agent_traj) > 10), \
-        #    "Might have loaded in broken datafiles {}, length {}, {}, length {} ".format(demo_file, agent_file, len(demo_traj), len(agent_traj)=
         demo_data = self._make_demo(demo_traj, task_name)
         traj = self._make_traj(agent_traj, task_name)
         return {'demo_data': demo_data, 'traj': traj, 'task_name': task_name, 'task_id': sub_task_id}
@@ -247,31 +314,72 @@ class MultiTaskPairedDataset(Dataset):
         """
         Do a near-uniform sampling of the demonstration trajectory
         """
-        clip = lambda x : int(max(0, min(x, len(traj) - 1)))
-        per_bracket = max(len(traj) / self._demo_T, 1)
-        frames = []
-        cp_frames = []
-        for i in range(self._demo_T):
-            # fix to using uniform + 'sample_side' now
-            if i == self._demo_T - 1:
-                n = len(traj) - 1
-            elif i == 0:
-                n = 0
-            else:
-                n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
-            #frames.append(_make_frame(n))
-            obs = traj.get(n)['obs']['image']
+        if self.select_random_frames:
+            clip = lambda x : int(max(0, min(x, len(traj) - 1)))
+            per_bracket = max(len(traj) / self._demo_T, 1)
+            frames = []
+            cp_frames = []
+            for i in range(self._demo_T):
+                # fix to using uniform + 'sample_side' now
+                if i == self._demo_T - 1:
+                    n = len(traj) - 1
+                elif i == 0:
+                    n = 0
+                else:
+                    n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
+                #frames.append(_make_frame(n))
+                obs = traj.get(n)['obs']['image']
 
-            processed = self.frame_aug(task_name, obs)
-            frames.append(processed)
-            if self.aug_twice:
-                cp_frames.append(self.frame_aug(task_name, obs, True))
+                processed = self.frame_aug(task_name, obs)
+                frames.append(processed)
+                if self.aug_twice:
+                    cp_frames.append(self.frame_aug(task_name, obs, True))
+        else:
+            frames = []
+            cp_frames = []
+            for i in range(self._demo_T):
+                # get first frame
+                if i == 0:
+                    n = 0
+                # get the last frame
+                elif i == self._demo_T - 1:
+                    n = len(traj) - 1
+                elif i == 1:
+                    obj_in_hand = 0
+                    # get the first frame with obj_in_hand and the gripper is closed
+                    for t in range(1, len(traj)):
+                        state = traj.get(t)['info']['status']
+                        trj_t = traj.get(t)
+                        gripper_act = trj_t['action'][-1] 
+                        if state == 'obj_in_hand' and gripper_act == 1:
+                            obj_in_hand = t
+                            n = t
+                            break
+                elif i == 2:
+                    # get the middle moving frame
+                    start_moving = 0
+                    end_moving = 0
+                    for t in range(obj_in_hand, len(traj)):
+                        state = traj.get(t)['info']['status']
+                        if state == 'moving' and start_moving == 0:
+                            start_moving = t
+                        elif state != 'moving' and start_moving != 0 and end_moving == 0:
+                            end_moving = t
+                            break
+                    n = start_moving + int((end_moving-start_moving)/2)
+
+                obs = traj.get(n)['obs']['image']
+
+                processed = self.frame_aug(task_name, obs)
+                frames.append(processed)
+                if self.aug_twice:
+                    cp_frames.append(self.frame_aug(task_name, obs, True))
 
         ret_dict = dict()
         ret_dict['demo'] = torch.stack(frames)
         ret_dict['demo_cp'] = torch.stack(cp_frames)
         return ret_dict
-
+    
     def _make_traj(self, traj, task_name):
         crop_params = self.task_crops.get(task_name, [0,0,0,0])
         def _adjust_points(points, frame_dims):
@@ -356,8 +464,10 @@ class DIYBatchSampler(Sampler):
         self,
         task_to_idx,
         subtask_to_idx,
+        object_distribution_to_indx,
         sampler_spec=dict(),
         tasks_spec=dict(),
+        n_step=0,
         ):
         """
         Args:
@@ -413,7 +523,9 @@ class DIYBatchSampler(Sampler):
         self.task_samplers = OrderedDict()
         self.task_iterators = OrderedDict()
         self.task_info = OrderedDict()
-
+        self.balancing_policy = sampler_spec.get('balancing_policy', 0)
+        self.object_distribution_to_indx = object_distribution_to_indx
+        self.num_step = n_step
         for spec in tasks_spec:
             task_name = spec.name
             idxs = task_to_idx.get(task_name)
@@ -430,12 +542,21 @@ class DIYBatchSampler(Sampler):
             print("Task {} loaded {} subtasks, starting from {}, should all have sizes {}".format(\
                 task_name, num_loaded_sub_tasks, first_id, sub_task_size))
             for sub_task, sub_idxs in subtask_to_idx[task_name].items():
-                self.task_samplers[task_name][sub_task] = SubsetRandomSampler(sub_idxs)
-                assert len(sub_idxs) == sub_task_size, \
-                    'Got uneven data sizes for sub-{} under the task {}!'.format(sub_task, task_name)
 
-                self.task_iterators[task_name][sub_task] = iter(SubsetRandomSampler(sub_idxs))
-                # print('subtask indexs:', sub_task, max(sub_idxs))
+                # the balancing has been requested 
+                if self.balancing_policy == 1 and self.object_distribution_to_indx != None:
+                    self.task_samplers[task_name][sub_task] = [SubsetRandomSampler(sample_list) for sample_list in object_distribution_to_indx[task_name][sub_task]]
+                    self.task_iterators[task_name][sub_task] = [iter(SubsetRandomSampler(sample_list)) for sample_list in object_distribution_to_indx[task_name][sub_task]]
+                    for i, sample_list in enumerate(object_distribution_to_indx[task_name][sub_task]):
+                        if len(sample_list) == 0:
+                            print(f"Task {task_name} - Sub-task {sub_task} - Position {i}")
+
+                else:
+                    self.task_samplers[task_name][sub_task] = SubsetRandomSampler(sub_idxs)
+                    assert len(sub_idxs) == sub_task_size, \
+                        'Got uneven data sizes for sub-{} under the task {}!'.format(sub_task, task_name)
+                    self.task_iterators[task_name][sub_task] = iter(SubsetRandomSampler(sub_idxs))
+                    # print('subtask indexs:', sub_task, max(sub_idxs))
             curr_task_info = {
                 'size':         len(idxs),
                 'n_tasks':      len(subtask_to_idx[task_name].keys()),
@@ -485,15 +606,27 @@ class DIYBatchSampler(Sampler):
         for i in range(self.max_len):
             for idx in range(self.batch_size):
                 (name, sub_task) = self.idx_map[idx]
-                # print(name, sub_task)
-                sampler = self.task_samplers[name][sub_task]
-                iterator = self.task_iterators[name][sub_task]
-                try:
-                    batch.append(next(iterator))
-                except StopIteration:   #print('early sstop:', i, name)
-                    iterator = iter(sampler) # re-start the smaller-sized tasks
-                    batch.append(next(iterator))
-                    self.task_iterators[name][sub_task] = iterator
+                if self.balancing_policy == 1 and self.object_distribution_to_indx != None:
+                    slot_indx = idx % len(self.task_samplers[name][sub_task])
+                    # take one sample for the current task, sub_task, and slot
+                    sampler = self.task_samplers[name][sub_task][slot_indx]
+                    iterator = self.task_iterators[name][sub_task][slot_indx]
+                    try:
+                        batch.append(next(iterator))
+                    except StopIteration:   #print('early sstop:', i, name)
+                        iterator = iter(sampler) # re-start the smaller-sized tasks
+                        batch.append(next(iterator))
+                        self.task_iterators[name][sub_task][slot_indx] = iterator
+                else:
+                    # print(name, sub_task)
+                    sampler = self.task_samplers[name][sub_task]
+                    iterator = self.task_iterators[name][sub_task]
+                    try:
+                        batch.append(next(iterator))
+                    except StopIteration:   #print('early sstop:', i, name)
+                        iterator = iter(sampler) # re-start the smaller-sized tasks
+                        batch.append(next(iterator))
+                        self.task_iterators[name][sub_task] = iterator
 
             if len(batch) == self.batch_size:
                 if self.shuffle:
