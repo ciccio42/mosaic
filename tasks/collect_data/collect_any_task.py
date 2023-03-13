@@ -151,10 +151,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
     assert args.num_workers > 0, "num_workers must be positive!"
     
-    import debugpy
-    debugpy.listen(('0.0.0.0', 5678))
-    print("Waiting for debugger attach")
-    debugpy.wait_for_client()
+    # import debugpy
+    # debugpy.listen(('0.0.0.0', 5678))
+    # print("Waiting for debugger attach")
+    # debugpy.wait_for_client()
     
     if args.random_seed:
         assert args.n_env is None
@@ -162,6 +162,18 @@ if __name__ == '__main__':
     elif args.n_env:
         envs, rng = [263237945 + i for i in range(args.n_env)], random.Random(385008283)
         seeds = [int(rng.choice(envs)) for _ in range(args.N)]
+        # write seeds on file
+        seeds_for_sub_task={}
+        seeds_for_sub_task[args.task_name] = {}
+        for task_indx in range(args.n_tasks):
+            start = task_indx*args.per_task_group
+            end = args.per_task_group + (task_indx*args.per_task_group)
+            seeds_for_sub_task[args.task_name][task_indx] = seeds[start:end]
+        # save seed file
+        import json
+        seeds_file_path = os.path.join(args.save_dir, f"{args.robot}_seeds.txt")
+        with open(seeds_file_path, 'w') as f:
+            f.write(json.dumps(seeds_for_sub_task))
     else:
         n_per_group = args.per_task_group
         seeds = [263237945 + int(n // (args.n_tasks * n_per_group)) * n_per_group + n % n_per_group for n in range(args.N)]

@@ -2,7 +2,6 @@ import random
 import torch
 from os.path import join, expanduser
 from mosaic.datasets import load_traj, split_files
-
 from torch.utils.data import Dataset, Sampler, SubsetRandomSampler, RandomSampler
 from torch.utils.data._utils.collate import default_collate
 from torchvision import transforms
@@ -15,6 +14,7 @@ from collections import defaultdict, OrderedDict
 import glob 
 import numpy as np 
 import matplotlib.pyplot as plt
+import copy
 from copy import deepcopy
 
 JITTER_FACTORS = {'brightness': 0.4, 'contrast': 0.4, 'saturation': 0.4, 'hue': 0.1} 
@@ -260,8 +260,8 @@ class MultiTaskPairedDataset(Dataset):
             else:
                 n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
             #frames.append(_make_frame(n))
-            obs = traj.get(n)['obs']['image']
-
+            # convert the BGR image into RGB
+            obs = copy.copy(traj.get(n)['obs']['image'][:,:,::-1]/255)
             processed = self.frame_aug(task_name, obs)
             frames.append(processed)
             if self.aug_twice:
@@ -312,7 +312,7 @@ class MultiTaskPairedDataset(Dataset):
         for j, t in enumerate(chosen_t):
             t = t.item()
             step_t = traj.get(t)
-            image = step_t['obs']['image']
+            image = copy.copy(step_t['obs']['image'][:,:,::-1]/255)
             processed = self.frame_aug(task_name, image)
             images.append( processed )
             if self.aug_twice:

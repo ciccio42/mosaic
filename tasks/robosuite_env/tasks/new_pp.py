@@ -274,7 +274,6 @@ class PickPlace(SingleArmEnv):
         y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
         arr = np.arange(4)
         np.random.shuffle(arr)
-
         for i in range(4):
             self.placement_initializer.append_sampler(
                 sampler=UniformRandomSampler(
