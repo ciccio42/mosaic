@@ -88,7 +88,7 @@ class Trainer:
 
         # initialize optimizer and lr scheduler
         optim_weights       = optim_weights if optim_weights is not None else model.parameters()
-        optimizer, scheduler = self._build_optimizer_and_scheduler(optim_weights, self.train_cfg)
+        optimizer, scheduler = self._build_optimizer_and_scheduler(self.config.train_cfg.optimizer, optim_weights, self.train_cfg)
 
         # initialize constants:
         # compute epochs
@@ -201,9 +201,10 @@ class Trainer:
                     self._early_stopping(weighted_task_loss_val, model, self._step)
 
                     model = model.train()
-                    
                     if self._early_stopping.early_stop:
                         break
+                    
+                    self.save_checkpoint(model, optimizer, weights_fn, save_fn)
                 
                 if self.config.wandb_log:
                         wandb.log(tolog)
@@ -254,10 +255,14 @@ class Trainer:
     def device(self):
         return copy.deepcopy(self._device)
     
-    def _build_optimizer_and_scheduler(self, optim_weights, cfg):
+    def _build_optimizer_and_scheduler(self, optimizer, optim_weights, cfg):
         assert self.device_list is not None, str(self.device_list)
-        optimizer = torch.optim.Adam(
-            optim_weights, cfg.lr, weight_decay=cfg.get('weight_decay', 0))
+        print(f"Creating {optimizer}, with lr {cfg.lr}")
+        if optimizer=='Adam':
+            optimizer = torch.optim.Adam(
+                optim_weights, cfg.lr, weight_decay=cfg.get('weight_decay', 0))
+        elif optimizer=='RMSProp':
+            optimizer = torch.optim.RMSprop(optim_weights, cfg.lr, weight_decay=cfg.get('weight_decay', 0))
         return optimizer, build_scheduler(optimizer, cfg.get('lr_schedule', {}))
 
 

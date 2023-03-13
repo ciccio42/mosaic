@@ -54,12 +54,15 @@ def make_data_loaders(config, dataset_cfg):
 
     dataset_cfg.mode = 'train'
     dataset = instantiate(dataset_cfg)
+    train_step = int(config.get('epochs')*int(len(dataset)/config.get('bsize')))
     samplerClass = DIYBatchSampler 
     train_sampler = samplerClass(
             task_to_idx=dataset.task_to_idx,
             subtask_to_idx=dataset.subtask_to_idx,
             tasks_spec=dataset_cfg.tasks_spec,
-            sampler_spec=config.samplers)
+            object_distribution_to_indx=dataset.object_distribution_to_indx,
+            sampler_spec=config.samplers,
+            n_step=train_step)
     train_loader = DataLoader(
         dataset,
         batch_sampler=train_sampler,
@@ -71,11 +74,14 @@ def make_data_loaders(config, dataset_cfg):
     dataset_cfg.mode = 'val'
     val_dataset = instantiate(dataset_cfg)
     config.samplers.batch_size = config.train_cfg.val_size # allow validation batch to have a different size
+    val_step = int(config.get('epochs')*int(len(val_dataset)/config.get('vsize')))
     val_sampler = samplerClass(
             task_to_idx=val_dataset.task_to_idx,
             subtask_to_idx=val_dataset.subtask_to_idx,
             tasks_spec=dataset_cfg.tasks_spec,
-            sampler_spec=config.samplers
+            object_distribution_to_indx=None,
+            sampler_spec=config.samplers,
+            n_step=val_step
             )
 
     val_loader = DataLoader(
