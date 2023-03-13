@@ -63,13 +63,6 @@ TASK_MAP = {
         'agent-teacher': ('PandaNutAssemblyDistractor', 'SawyerNutAssemblyDistractor'),
         'render_hw': (100, 180), 
         },
-    #'new_pick_place': {
-    #    'num_variations':   16, 
-    #    'env_fn':   place_expert,
-    #    'eval_fn':  pick_place_eval,
-    #    'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-    #    'render_hw': (100, 180),  
-    #    },
     'pick_place': {
         'num_variations':   16, 
         'env_fn':   place_expert,
@@ -156,7 +149,7 @@ def select_random_frames(frames, n_select, sample_sides=True, random_frames=True
     
     if isinstance(frames, (list, tuple)):
         return [frames[i] for i in selected_frames]
-    elif isinstance(frames, Trajectory):
+    elif isinstance(frames, Trajectory):     
         return [frames[i]['obs']['image'] for i in selected_frames]
         #return [frames[i]['obs']['image-state'] for i in selected_frames]
     return frames[selected_frames]
@@ -238,7 +231,7 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     return agent_env, context, variation, teacher_expert_rollout
 
 def rollout_imitation(model, config, ctr, 
-    heights=100, widths=200, size=0, shape=0, color=0, max_T=60, env_name='place', gpu_id=-1, baseline=None, variation=None):
+    heights=100, widths=200, size=0, shape=0, color=0, max_T=60, env_name='place', gpu_id=-1, baseline=None, variation=None, seed=None):
     if gpu_id == -1:
         gpu_id = int(ctr % torch.cuda.device_count())
     model = model.cuda(gpu_id)
@@ -259,11 +252,11 @@ def rollout_imitation(model, config, ctr,
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name
     eval_fn = build_task['eval_fn']
-    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
+    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline, seed=seed)
     print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
     return traj, info, expert_traj, context
 
-def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, variation, n):
+def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, variation, seed, n):
     json_name = results_dir + '/traj{}.json'.format(n)
     pkl_name  = results_dir + '/traj{}.pkl'.format(n)
     if os.path.exists(json_name) and os.path.exists(pkl_name):
@@ -274,7 +267,7 @@ def _proc(model, config, results_dir, heights, widths, size, shape, color, env_n
     else:
         rollout, task_success_flags, expert_traj, context = rollout_imitation(
             model, config, n, heights, widths, size, shape, color, 
-            max_T=60, env_name=env_name, baseline=baseline, variation=variation)
+            max_T=60, env_name=env_name, baseline=baseline, variation=variation, seed=seed)
         pkl.dump(rollout, open(results_dir+'/traj{}.pkl'.format(n), 'wb'))
         pkl.dump(expert_traj, open(results_dir+'/demo{}.pkl'.format(n), 'wb'))
         pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb')) 
@@ -305,6 +298,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug', action='store_true')
     parser.add_argument('--results_name', default=None, type=str)
     parser.add_argument('--variation', default=None, type=int)
+    parser.add_argument('--seed', default=None, type=int)
 
     args = parser.parse_args()
     
@@ -367,10 +361,14 @@ if __name__ == '__main__':
     assert build_task, 'Got unsupported task '+args.env
 
     if args.N == -1:
-        args.N = int(args.eval_each_task * build_task.get('num_variations', 0))
-        if args.eval_subsets:
-            print("evaluating only first {} subtasks".format(args.eval_subsets))
-            args.N = int(args.eval_each_task * args.eval_subsets)
+        if not args.variation:
+            args.N = int(args.eval_each_task * build_task.get('num_variations', 0))
+            if args.eval_subsets:
+                print("evaluating only first {} subtasks".format(args.eval_subsets))
+                args.N = int(args.eval_each_task * args.eval_subsets)
+        else:
+            args.N = int(args.eval_each_task)
+
     assert args.N, "Need pre-define how many trajs to test for each env"
     print('Found {} GPU devices, using {} parallel workers for evaluating {} total trajectories\n'.format(torch.cuda.device_count(), args.num_workers, args.N))
 
@@ -406,10 +404,10 @@ if __name__ == '__main__':
     shape = args.shape
     color = args.color
     variation = args.variation
+    seed = args.seed
 
     parallel = args.num_workers > 1
-    # model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, n, variation
-    f = functools.partial(_proc, model, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline, variation)
+    f = functools.partial(_proc, model, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline, variation, seed)
 
     if parallel:
         with Pool(args.num_workers) as p:
