@@ -2,6 +2,7 @@ import random
 import torch
 from os.path import join, expanduser
 from mosaic.datasets import load_traj, split_files
+import cv2
 from torch.utils.data import Dataset, Sampler, SubsetRandomSampler, RandomSampler, WeightedRandomSampler
 from torch.utils.data._utils.collate import default_collate
 from torchvision import transforms
@@ -250,7 +251,7 @@ class MultiTaskPairedDataset(Dataset):
         self.transforms = transforms.Compose([ # normalize at the end
             RandomApply([weak_jitter], p=0.1),
             RandomApply(
-                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0))) ], p=0),
+                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0))) ], p=0.1),
             randcrop,
             self.normalize])
 
@@ -330,7 +331,6 @@ class MultiTaskPairedDataset(Dataset):
                 #frames.append(_make_frame(n))
                 # convert from BGR to RGB and scale to 0-1 range
                 obs = copy.copy(traj.get(n)['obs']['image'][:,:,::-1]/255)
-
                 processed = self.frame_aug(task_name, obs)
                 frames.append(processed)
                 if self.aug_twice:

@@ -21,7 +21,7 @@ def get_action(model, states, images, context, gpu_id, n_steps, max_T=80, baseli
         i_t = torch.from_numpy(np.concatenate(images, 0).astype(np.float32))[None] 
     else:
         i_t = images[0][None]
-    s_t, i_t = s_t.cuda(gpu_id), i_t.cuda(gpu_id)
+    s_t, i_t = s_t.float().cuda(gpu_id), i_t.float().cuda(gpu_id)
     
     if baseline == 'maml':
         learner = model.clone()
@@ -43,7 +43,7 @@ def startup_env(model, env, context, gpu_id, variation_id, baseline=None):
     if baseline is None:
         states = deque(states, maxlen=1)
         images = deque(images, maxlen=1) # NOTE: always use only one frame
-    context = context.cuda(gpu_id)
+    context = context.cuda(gpu_id).float()
     np.random.seed(None)
     while True:
         try:
@@ -212,7 +212,8 @@ def pick_place_eval(model, env, context, gpu_id, variation_id, img_formatter, ma
         if baseline and len(states) >= 5:
             states, images = [], []
         states.append(np.concatenate((obs['ee_aa'], obs['gripper_qpos'])).astype(np.float32)[None])
-        images.append(img_formatter(obs['image'])[None])
+        # convert observation from BGR to RGB and scale to 0-1
+        images.append(img_formatter(obs['image'][:,:,::-1]/255)[None])
         
         action = get_action(model, states, images, context, gpu_id, n_steps, max_T, baseline)
         

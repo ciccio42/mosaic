@@ -2,7 +2,7 @@ debug: False
 EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
 save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
 wandb_log: True 
-project_name: mosaic_baseline_balanced_batch
+project_name: mosaic_baseline_balanced_batch_no_strong_aug_no_crop_twice_scaled_rgb_lr_schedule_state_stack
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -12,7 +12,7 @@ exp_name:       -1
 epochs:         10
 bsize:          30
 vsize:          ${bsize} # optionally, set to a different batchsize for validation loader
-optimizer:      RMSProp #Adam
+optimizer:      Adam #RMSProp
 task_names: None
 # imitation loss multipliers
 inv_mul:        1
@@ -44,6 +44,7 @@ train_cfg:
   sampler:              ${samplers}
   target_update_freq:   5  # used for soft parameter update
   early_stopping: ${early_stopping_cfg}
+  lr_schedule: {'type': ReduceLROnPlateau} #ExponentialDecay
 
 # early stopping configurator
 early_stopping_cfg:
@@ -85,11 +86,11 @@ dataset_cfg:
   obs_T:            7
   data_augs:        ${augs}
   non_sequential:   False
-  crop_twice:       True
+  crop_twice:       False
   state_spec:       [ee_aa, gripper_qpos]
   allow_val_skip:   ${val_skip}
   allow_train_skip: ${train_skip}
-  use_strong_augs:  True 
+  use_strong_augs:  False 
   select_random_frames: True
   compute_obj_distribution: True
 
@@ -99,7 +100,7 @@ augs:
   grayscale:         0.01   
   blur:              [0.1, 2.0] 
   flip:              0.05   # only flip for the strong augs
-  weak_crop_scale:   [0.7, 1.0] 
+  weak_crop_scale:   [0.8, 1.0] 
   strong_crop_scale: [0.6, 1.0] 
   weak_crop_ratio:   [1.8, 1.8]
   strong_crop_ratio: [1.8, 1.8]
@@ -139,8 +140,8 @@ policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}
 mosaic:
   _target_:           mosaic.models.mt_rep.VideoImitation 
   latent_dim:         40
-  sdim:               9
-  concat_state:       False
+  sdim:               8
+  concat_state:       True
   height:             ${train_cfg.dataset.height}
   width:              ${train_cfg.dataset.width} 
   demo_T:             ${train_cfg.dataset.demo_T}
@@ -149,8 +150,8 @@ mosaic:
   dim_W:              12  
   demo_mean:          True 
   action_cfg:         ${actions}
-  concat_demo_head:   True
-  concat_demo_act:    False 
+  concat_demo_head:   False
+  concat_demo_act:    True 
   attn_cfg:           ${attn}
   byol_config:        ${byol}
   simclr_config:      ${simclr}
@@ -163,8 +164,8 @@ actions:
   n_mixtures:       4   
   const_var:        False
   sep_var:          True 
-  concat_demo_head: True
-  concat_demo_act:  False
+  concat_demo_head:   False
+  concat_demo_act:    True
   demo_mean:        ${policy.demo_mean}
 
 attn:

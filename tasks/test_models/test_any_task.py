@@ -220,7 +220,8 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     
     assert isinstance(teacher_expert_rollout, Trajectory)
     context = select_random_frames(teacher_expert_rollout, T_context, sample_sides=True, random_frames=random_frames)
-    context = [img_formatter(i)[None] for i in context]
+    # convert BGR context image to RGB and scale to 0-1
+    context = [img_formatter(i[:,:,::-1]/255)[None] for i in context]
     # assert len(context ) == 6
     if isinstance(context[0], np.ndarray):
         context = torch.from_numpy(np.concatenate(context, 0))[None]
@@ -252,7 +253,7 @@ def rollout_imitation(model, config, ctr,
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name
     eval_fn = build_task['eval_fn']
-    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline, seed=seed)
+    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
     print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
     return traj, info, expert_traj, context
 
@@ -352,7 +353,7 @@ if __name__ == '__main__':
     
     if args.wandb_log:
         model_name = model_path.split("/")[-2]
-        run = wandb.init(project=args.project_name, job_type='test', group=model_name)
+        run = wandb.init(project=args.project_name, job_type='test', group=model_name.split("-1gpu")[0])
         run.name = model_name + f'-Test_{args.env}-Step_{model_saved_step}' 
         wandb.config.update(args)
        

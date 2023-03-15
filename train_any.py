@@ -76,7 +76,6 @@ class Trainer:
         path=self.save_dir
         )
 
-
     def train(self, model, weights_fn=None, save_fn=None, optim_weights=None): 
         self._train_loader, self._val_loader = make_data_loaders(self.config, self.train_cfg.dataset)
         # wrap model in DataParallel if needed and transfer to correct device
@@ -138,6 +137,8 @@ class Trainer:
                     json.dump({k: str(v) for k, v in raw_stats.items()}, open(stats_save_name, 'w'))
                     
                 optimizer.zero_grad()
+                self.batch_distribution(inputs)
+
                 ## calculate loss here:
                 task_losses =  calculate_task_loss(self.config, self.train_cfg, self._device, model, inputs)
                 task_names = sorted(task_losses.keys())
@@ -197,6 +198,14 @@ class Trainer:
                     
                     # compute the sum of validation losses
                     weighted_task_loss_val = sum([l["loss_sum"] * task_loss_muls.get(name) for name, l in avg_losses.items()])
+                    if self.config.train_cfg.lr_schedule['type'] is not None:
+                        # perform lr-scheduling step
+                        scheduler.step(val_loss=weighted_task_loss_val)
+                        if self.config.wandb_log:
+                            # log learning-rate
+                                tolog['Validation Step'] = self._step
+                                tolog['learning_rate'] = scheduler._schedule.optimizer.param_groups[0]['lr']
+                    
                     # check for early stopping
                     self._early_stopping(weighted_task_loss_val, model, self._step)
 

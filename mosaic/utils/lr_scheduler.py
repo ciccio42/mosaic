@@ -2,7 +2,7 @@ import torch
 
 
 def build_scheduler(optimizer, config):
-    lr_schedule = config.pop('type', None)
+    lr_schedule = config['type']
     if lr_schedule == 'ReduceLROnPlateau':
         return ReduceOnPlateau(optimizer)
     elif lr_schedule == 'ExponentialDecay':
@@ -23,7 +23,7 @@ class BaseScheduler:
 
 class ReduceOnPlateau(BaseScheduler):
     def __init__(self, optimizer):
-        self._schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min')
+        self._schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
     
     def step(self, val_loss, **kwargs):
         self._schedule.step(val_loss)

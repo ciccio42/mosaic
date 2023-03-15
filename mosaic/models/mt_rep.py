@@ -193,8 +193,7 @@ class _TransformerFeatures(nn.Module):
         out_dict = OrderedDict()
 
         network_fn = self._resnet_features if self.network_flag == 0 else self._impala_features
-
-        im_in                     = torch.cat((context, images), 1)
+        im_in                     = torch.cat((context, images), 1).float()
         im_features, no_pe_img_features = network_fn(im_in)
         out_dict['img_features']  = no_pe_img_features # B T d H W
         out_dict['img_features_pe'] = rearrange(im_features, 'B d T H W -> B T d H W')
@@ -458,6 +457,10 @@ class VideoImitation(nn.Module):
                 ),
                 dim=2)
             # print(inv_in.shape)
+        if self._concat_state:
+            inv_in = torch.cat((torch.cat((inv_in, states[:, :-1]), dim=2), states[:, 1:]), dim=2)
+            
+
         inv_pred                     = self._inv_model(inv_in)
         if self.concat_demo_head:
             inv_pred                 = torch.cat((inv_pred, demo_embed[:, :-1]), dim=2)
