@@ -175,6 +175,56 @@ def calculate_maml_loss(config, device, meta_model, model_inputs):
 
     return torch.cat(bc_loss, dim=0), torch.cat(aux_loss, dim=0)
 
+def calculate_obj_pos_loss(config, train_cfg, device, model, task_inputs, loss, accuracy):
+    model_inputs = defaultdict(list)
+    task_to_idx = dict()
+    target_obj_pos_one_hot = OrderedDict()
+    start = 0
+    for idx, (task_name, inputs) in enumerate(task_inputs.items()):
+        
+        for key in  ['images', 'images_cp']:
+            model_inputs[key].append( inputs['traj'][key].to(device) )
+        for key in ['demo', 'demo_cp']:
+            model_inputs[key].append( inputs['demo_data'][key].to(device) )
+
+        task_inputs[task_name]['traj']['target_position_one_hot'].require_grad=True
+        obj_position = task_inputs[task_name]['traj']['target_position_one_hot'].to(device)
+        obj_position.require_grad=True
+        target_obj_pos_one_hot[task_name] = obj_position
+        task_bsize  = inputs['traj']['images'].shape[0]
+        task_to_idx[task_name] = [ start + i for i in range(task_bsize)]
+        start += task_bsize
+
+    for key in model_inputs.keys():
+        model_inputs[key] = torch.cat(model_inputs[key], dim=0)
+    
+    all_losses = OrderedDict()
+    out = model(
+                images=model_inputs['images'], images_cp=model_inputs['images_cp'], 
+                context=model_inputs['demo'],  context_cp=model_inputs['demo_cp']) 
+    
+    ##### ---- #####
+    # ToDo generalize to multiple-task
+    ##### ---- #####
+    for task_name in target_obj_pos_one_hot.keys():
+        all_losses[task_name] = dict()
+        # for each task compute the cross-entropy loss
+        # B - T - Number Classes
+        gt = target_obj_pos_one_hot[task_name].permute(0,2,1)
+        gt.require_grad=True
+        prediction = out['target_obj_pred'].permute(0,2,1)
+        all_losses[task_name]['ce_loss'] = loss(prediction, gt)
+
+    
+    all_accuracy = OrderedDict()
+    for task_name in target_obj_pos_one_hot.keys():
+        all_accuracy[task_name] = dict()
+        gt = torch.argmax(target_obj_pos_one_hot[task_name].permute(0,2,1), dim=1)
+        prediction = torch.argmax(out['target_obj_pred'].permute(0,2,1), dim=1)
+        all_accuracy[task_name]['accuracy'] = accuracy(prediction, gt)
+    
+    return all_losses, all_accuracy
+
 def calculate_task_loss(config, train_cfg, device, model, task_inputs):
     """Assumes inputs are collated by task names already, organize things properly before feeding into the model s.t.
         for each batch input, the model does only one forward pass."""
