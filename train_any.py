@@ -15,6 +15,8 @@ import wandb
 from copy import deepcopy
 from mosaic.utils.early_stopping import EarlyStopping
 from tqdm import tqdm
+# from torch.utils.tensorboard import SummaryWriter
+# writer = SummaryWriter()
 
 class Trainer:
 
@@ -67,7 +69,7 @@ class Trainer:
             #     print(k, dict(self.config.get(k)))
             #     print('-'*20)
             wandb_config = {k: self.config.get(k) for k in config_keys}
-            run = wandb.init(project=self.config.project_name, name=self.config.exp_name, config=wandb_config)
+            run = wandb.init(project=self.config.project_name, name=self.config.exp_name, config=wandb_config, sync_tensorboard=False)
 
         # create early stopping object
         self._early_stopping = EarlyStopping(patience=self.train_cfg.early_stopping.patience,
@@ -85,6 +87,11 @@ class Trainer:
         if self.device_count > 1 and not isinstance(model, nn.DataParallel):
             print("Training stage \n Device list: {}".format(self.device_list))
             model = nn.DataParallel(model, device_ids=self.device_list)
+
+        # save model
+        # save the model's state dictionary to a file
+        if self.config.wandb_log:
+            wandb.watch(model)
 
         # initialize optimizer and lr scheduler
         optim_weights       = optim_weights if optim_weights is not None else model.parameters()
@@ -207,24 +214,23 @@ class Trainer:
                                 tolog['learning_rate'] = scheduler._schedule.optimizer.param_groups[0]['lr']
                     
                     # check for early stopping
-                    self._early_stopping(weighted_task_loss_val, model, self._step)
+                    self._early_stopping(weighted_task_loss_val, model, self._step, optimizer)
 
                     model = model.train()
                     if self._early_stopping.early_stop:
                         break
-                    
-                    self.save_checkpoint(model, optimizer, weights_fn, save_fn)
-                
+                                    
                 if self.config.wandb_log:
                         wandb.log(tolog)
 
                 self._step += 1
-                # update target params
-                mod = model.module if isinstance(model, nn.DataParallel) else model
-                if self.train_cfg.target_update_freq > -1:
-                    mod.momentum_update(frac)
-                    if self._step % self.train_cfg.target_update_freq == 0:
-                        mod.soft_param_update()
+                if not model._load_target_obj_detector or not model._freeze_target_obj_detector:
+                    # update target params
+                    mod = model.module if isinstance(model, nn.DataParallel) else model
+                    if self.train_cfg.target_update_freq > -1:
+                        mod.momentum_update(frac)
+                        if self._step % self.train_cfg.target_update_freq == 0:
+                            mod.soft_param_update()
 
             if self._early_stopping.early_stop:
                 print("----Stop training for early-stopping----")

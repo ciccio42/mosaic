@@ -23,7 +23,7 @@ class BaseScheduler:
 
 class ReduceOnPlateau(BaseScheduler):
     def __init__(self, optimizer):
-        self._schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10)
+        self._schedule = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=5)
     
     def step(self, val_loss, **kwargs):
         self._schedule.step(val_loss)

@@ -9,7 +9,9 @@ from mosaic.models.rep_modules import BYOLModule, ContrastiveModule
 from mosaic.models.basic_embedding import TemporalPositionalEncoding 
 from einops import rearrange, repeat, parse_shape
 from collections import OrderedDict
- 
+import os, hydra
+from omegaconf import DictConfig, OmegaConf
+
 class _StackedAttnLayers(nn.Module):
     """
     Returns all intermediate-layer outputs, in case we want to re-use features + add more losses later
@@ -284,6 +286,10 @@ class VideoImitation(nn.Module):
     def __init__(
         self,
         latent_dim,
+        load_target_obj_detector=False,
+        target_obj_detector_step=0,
+        target_obj_detector_path=None,
+        freeze_target_obj_detector=False,
         height=120,
         width=160,
         demo_T=4,
@@ -304,40 +310,49 @@ class VideoImitation(nn.Module):
         ):
         super().__init__()
 
-        self._embed = _TransformerFeatures(latent_dim=latent_dim, demo_T=demo_T, dim_H=dim_H, dim_W=dim_W, **attn_cfg)
-        self._target_embed = copy.deepcopy(self._embed)
-        self._target_embed.load_state_dict(self._embed.state_dict())
-        for p in self._target_embed.parameters():
-            p.requires_grad = False             # only update with soft param update!
+        if not load_target_obj_detector:
+            self._embed = _TransformerFeatures(latent_dim=latent_dim, demo_T=demo_T, dim_H=dim_H, dim_W=dim_W, **attn_cfg)
+        else:
+            # load target object detector module
+            conf_file = OmegaConf.load(os.path.join(target_obj_detector_path, "config.yaml"))
+            self._embed = self._load_model(model_path=target_obj_detector_path, step=target_obj_detector_step, conf_file=conf_file, freeze=freeze_target_obj_detector)
 
-        # one auxillary module calculate multiple losses
-        # create a dummy input to calculate feature dimensions here
-        with torch.no_grad():
-            x = torch.zeros((1, demo_T+obs_T, 3, height, width))
+        if not load_target_obj_detector or not freeze_target_obj_detector:
+            self._target_embed = copy.deepcopy(self._embed)
+            self._target_embed.load_state_dict(self._embed.state_dict())
+            for p in self._target_embed.parameters():
+                p.requires_grad = False             # only update with soft param update!
 
-            _out = self._embed(images=x[:, :demo_T], context=x[:, demo_T:])
-            img_feats = _out['img_features']
-            print("Image feature dimensions: {}".format(img_feats.shape))
-            _, _, img_conv_dim, _, _ = img_feats.shape
-            attn_feats = _out['attn_features']
-            _, _, attn_conv_dim, _, _ = attn_feats.shape
-            assert img_feats.shape[1] == attn_feats.shape[1] or img_feats.shape[1] == attn_feats.shape[1] + demo_T # should both be B, demo_T+obs, _, _, _
-            img_feat_dim = np.prod(img_feats.shape[2:]) # should be d*H*W
-            attn_feat_dim = np.prod(attn_feats.shape[2:])
-            if img_feat_dim != attn_feat_dim:
-                print("Warning! pre and post attn features have different shapes:",
-                    img_feat_dim, attn_feat_dim)
+            # one auxillary module calculate multiple losses
+            # create a dummy input to calculate feature dimensions here
+            with torch.no_grad():
+                x = torch.zeros((1, demo_T+obs_T, 3, height, width))
+
+                _out = self._embed(images=x[:, :demo_T], context=x[:, demo_T:])
+                img_feats = _out['img_features']
+                print("Image feature dimensions: {}".format(img_feats.shape))
+                _, _, img_conv_dim, _, _ = img_feats.shape
+                attn_feats = _out['attn_features']
+                _, _, attn_conv_dim, _, _ = attn_feats.shape
+                assert img_feats.shape[1] == attn_feats.shape[1] or img_feats.shape[1] == attn_feats.shape[1] + demo_T # should both be B, demo_T+obs, _, _, _
+                img_feat_dim = np.prod(img_feats.shape[2:]) # should be d*H*W
+                attn_feat_dim = np.prod(attn_feats.shape[2:])
+                if img_feat_dim != attn_feat_dim:
+                    print("Warning! pre and post attn features have different shapes:",
+                        img_feat_dim, attn_feat_dim)
+        
+            self._byol = BYOLModule(
+                embedder=self._target_embed,
+                img_feat_dim=img_feat_dim, attn_feat_dim=attn_feat_dim,
+                img_conv_dim=img_conv_dim, attn_conv_dim=attn_conv_dim, **byol_config)
+            self._simclr = ContrastiveModule(
+                embedder=self._target_embed,
+                img_feat_dim=img_feat_dim, attn_feat_dim=attn_feat_dim,
+                img_conv_dim=img_conv_dim, attn_conv_dim=attn_conv_dim, **simclr_config)
+
+        self._load_target_obj_detector = load_target_obj_detector
+        self._freeze_target_obj_detector = freeze_target_obj_detector
         self._demo_T = demo_T
-
-        self._byol = BYOLModule(
-            embedder=self._target_embed,
-            img_feat_dim=img_feat_dim, attn_feat_dim=attn_feat_dim,
-            img_conv_dim=img_conv_dim, attn_conv_dim=attn_conv_dim, **byol_config)
-        self._simclr = ContrastiveModule(
-            embedder=self._target_embed,
-            img_feat_dim=img_feat_dim, attn_feat_dim=attn_feat_dim,
-            img_conv_dim=img_conv_dim, attn_conv_dim=attn_conv_dim, **simclr_config)
-
         self._concat_state = concat_state
         # action processing
         assert action_cfg.n_mixtures >= 1, "must predict at least one mixture!"
@@ -378,6 +393,25 @@ class VideoImitation(nn.Module):
         model_parameters = filter(lambda p: p.requires_grad, self.parameters())
         params = sum([np.prod(p.size()) for p in model_parameters])
         print('Total params in Imitation module:', params)
+
+
+    def _load_model(self, model_path=None, step=0, conf_file=None, remove_class_layers=True, freeze=True):
+        if model_path:
+            # 1. Create the model starting from configuration
+            model = hydra.utils.instantiate(conf_file.policy)
+            # 2. Load weights
+            weights = torch.load(os.path.join(model_path, f"model_save-{step}.pt"),map_location=torch.device('cpu'))
+            model.load_state_dict(weights)
+            # Remove classification layers
+            if remove_class_layers:
+                # Take the first _TransformerFeatures
+                model = list(model.children())[0]
+            if freeze:
+                for param in model.parameters():
+                    param.requires_grad = False
+            return model
+        else:
+            raise ValueError("Model path cannot be None")
 
 
     def get_action(self, embed_out, ret_dist=True, states=None):
@@ -433,18 +467,19 @@ class VideoImitation(nn.Module):
         if eval:
             return out # NOTE: early return here to do less computation during test time
  
-        # run frozen transformer on augmented images
-        embed_out_target = self._target_embed(images_cp, context_cp)
+        if not self._load_target_obj_detector or not self._freeze_target_obj_detector:
+            # run frozen transformer on augmented images
+            embed_out_target = self._target_embed(images_cp, context_cp)
 
-        byol_out_dict = self._byol(embed_out, embed_out_target)
-        for k, v in byol_out_dict.items():
-            assert 'byol' in k
-            out[k] = v
+            byol_out_dict = self._byol(embed_out, embed_out_target)
+            for k, v in byol_out_dict.items():
+                assert 'byol' in k
+                out[k] = v
 
-        simclr_out_dict = self._simclr(embed_out, embed_out_target)
-        for k, v in simclr_out_dict.items():
-            assert 'simclr' in k
-            out[k] = v
+            simclr_out_dict = self._simclr(embed_out, embed_out_target)
+            for k, v in simclr_out_dict.items():
+                assert 'simclr' in k
+                out[k] = v
 
         # run inverse model
         demo_embed, img_embed        = out['demo_embed'], embed_out['img_embed'] # both are (B ob_T d)

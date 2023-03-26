@@ -2,7 +2,7 @@ debug: False
 EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
 save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
 wandb_log: True 
-project_name: mosaic_baseline_balanced_batch_no_strong_aug_no_crop_twice_scaled_rgb_lr_schedule_state_stack
+project_name: None
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -48,7 +48,7 @@ train_cfg:
 
 # early stopping configurator
 early_stopping_cfg:
-  patience: -1
+  patience: 10
   delta: 1e-3
 
 # tasks related
@@ -63,7 +63,7 @@ defaults:
   - tasks_cfgs:  7_tasks
 
 # dataset/loader/samplers
-loader_workers:     4 
+loader_workers:   10
 samplers:        
   batch_size:         ${bsize}
   drop_last:          False
@@ -139,6 +139,10 @@ policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}
 
 mosaic:
   _target_:           mosaic.models.mt_rep.VideoImitation 
+  load_target_obj_detector: False
+  target_obj_detector_step: 0
+  target_obj_detector_path: null
+  freeze_target_obj_detector: False
   latent_dim:         40
   sdim:               8
   concat_state:       True

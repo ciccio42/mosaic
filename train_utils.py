@@ -260,6 +260,7 @@ def calculate_task_loss(config, train_cfg, device, model, task_inputs):
         all_losses["loss_sum"] = bc_loss + aux_loss
     else:
         if config.policy._target_ == 'mosaic.models.mt_rep.VideoImitation':
+            model = model.to(device)
             out = model(
                 images=model_inputs['images'], images_cp=model_inputs['images_cp'], 
                 context=model_inputs['demo'],  context_cp=model_inputs['demo_cp'],
@@ -292,14 +293,18 @@ def calculate_task_loss(config, train_cfg, device, model, task_inputs):
             all_losses["point_loss"] = l_point
 
         # NOTE: the model should output calculated rep-learning loss
-        rep_loss               = torch.zeros_like(all_losses["l_bc"] )
-        for k, v in out.items():
-            if k in train_cfg.rep_loss_muls.keys():
-                v              = torch.mean(v, dim=-1) # just return size (B,) here
-                v              = v * train_cfg.rep_loss_muls.get(k, 0)
-                all_losses[k]  = v
-                rep_loss       = rep_loss + v
-        all_losses["rep_loss"] = rep_loss
+        if not model._load_target_obj_detector or not model._freeze_target_obj_detector:
+            rep_loss               = torch.zeros_like(all_losses["l_bc"] )
+            for k, v in out.items():
+                if k in train_cfg.rep_loss_muls.keys():
+                    v              = torch.mean(v, dim=-1) # just return size (B,) here
+                    v              = v * train_cfg.rep_loss_muls.get(k, 0)
+                    all_losses[k]  = v
+                    rep_loss       = rep_loss + v
+            all_losses["rep_loss"] = rep_loss
+        else:
+            rep_loss = 0
+
         all_losses["loss_sum"] = all_losses["l_bc"] + all_losses["l_inv"] + rep_loss
 
     # flatten here to avoid headache
