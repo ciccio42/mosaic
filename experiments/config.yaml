@@ -1,6 +1,6 @@
 debug: False
-EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
-save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+EXPERT_DATA:    '/home/ciccio/Desktop/multi_task_lfd/multitask_dataset/multitask_dataset_baseline' 
+save_path:      /home/ciccio/Desktop/multi_task_lfd/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
 wandb_log: True 
 project_name: None
 log_freq:       1
@@ -63,7 +63,7 @@ defaults:
   - tasks_cfgs:  7_tasks
 
 # dataset/loader/samplers
-loader_workers:   10
+loader_workers:   0
 samplers:        
   batch_size:         ${bsize}
   drop_last:          False
@@ -84,6 +84,7 @@ dataset_cfg:
   split:            [0.9, 0.1]
   demo_T:           4
   obs_T:            7
+  take_first_frame: ${mosaic.concat_target_obj_embedding}
   data_augs:        ${augs}
   non_sequential:   False
   crop_twice:       False
@@ -143,6 +144,9 @@ mosaic:
   target_obj_detector_step: 0
   target_obj_detector_path: null
   freeze_target_obj_detector: False
+  remove_class_layers: True
+  load_contrastive: False
+  concat_target_obj_embedding: True
   latent_dim:         40
   sdim:               8
   concat_state:       True

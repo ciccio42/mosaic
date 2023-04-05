@@ -1,23 +1,27 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torchvision
 from torchvision import models
 import math
 import numpy as np
 from einops import rearrange, reduce, repeat
-
 class ResNetFeats(nn.Module):
     def __init__(self, out_dim=256, output_raw=False, drop_dim=1, use_resnet18=False, pretrained=False):
         super(ResNetFeats, self).__init__()
         print('pretrain', pretrained)
-        if pretrained and use_resnet18:
-            resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
-        elif pretrained and not use_resnet18:
-            resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
-        elif not pretrained and use_resnet18:
-            resnet = models.resnet18(weights=None)
-        elif not pretrained and not use_resnet18:
-            resnet = models.resnet50(weights=None)
+        torchvision_version = torchvision.__version__
+        if not torchvision_version.split('+')[0] in '0.9.1':
+            if pretrained and use_resnet18:
+                resnet = models.resnet18(weights=models.ResNet18_Weights.DEFAULT)
+            elif pretrained and not use_resnet18:
+                resnet = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+            elif not pretrained and use_resnet18:
+                resnet = models.resnet18(weights=None)
+            elif not pretrained and not use_resnet18:
+                resnet = models.resnet50(weights=None)
+        else:
+            resnet = models.resnet18(pretrained=pretrained) if use_resnet18 else models.resnet50(pretrained=pretrained)
         self._features = nn.Sequential(*list(resnet.children())[:-drop_dim])
         self._output_raw = output_raw
         self._out_dim = 512 if use_resnet18 else 2048

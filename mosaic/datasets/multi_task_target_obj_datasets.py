@@ -386,19 +386,28 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         images = []
         images_cp = []
         target_obj_pos_one_hot = []
-        image =  copy.copy(traj.get(0)['obs']['image'][:,:,::-1]/255)
-        images.append(self.frame_aug(task_name, image))
-        images_cp.append( self.frame_aug(task_name, image, True) )
+
+        if self.non_sequential:
+            end = len(traj)
+            chosen_t = torch.randperm(end)
+            chosen_t = chosen_t[chosen_t != 0][:self._obs_T]
+            for j, t in enumerate(chosen_t):
+                t = t.item()
+                step_t = traj.get(t)
+                image = copy.copy(step_t['obs']['image'][:,:,::-1]/255)
+                processed = self.frame_aug(task_name, image)
+                images.append( processed )
+                if self.aug_twice:
+                    images_cp.append( self.frame_aug(task_name, image, True) )
+
         ret_dict['images'] = torch.stack(images)
         if self.aug_twice:
             ret_dict['images_cp'] = torch.stack(images_cp)
-
         # get target object position
         one_hot_encoding = np.zeros(4)
         one_hot_encoding[self.index_to_slot[indx]] = 1
-        one_hot_encoding = torch.from_numpy(one_hot_encoding)
-        target_obj_pos_one_hot.append(one_hot_encoding)
-        ret_dict['target_position_one_hot'] = torch.stack(target_obj_pos_one_hot)
+        one_hot_encoding = torch.from_numpy(one_hot_encoding).repeat(self._obs_T, 1)
+        ret_dict['target_position_one_hot'] = one_hot_encoding
         return ret_dict
 
 

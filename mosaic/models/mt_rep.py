@@ -36,7 +36,7 @@ class _StackedAttnLayers(nn.Module):
         temperature=None, 
         causal=False, 
         n_heads=4, 
-        demo_T=4, 
+        demo_T=4,
         ):
         super().__init__()
         assert demo_ff_dim % n_heads == 0, "n_heads must evenly divide feedforward_dim"
@@ -290,6 +290,9 @@ class VideoImitation(nn.Module):
         target_obj_detector_step=0,
         target_obj_detector_path=None,
         freeze_target_obj_detector=False,
+        remove_class_layers=True,
+        load_contrastive=True,
+        concat_target_obj_embedding=True,
         height=120,
         width=160,
         demo_T=4,
@@ -309,15 +312,16 @@ class VideoImitation(nn.Module):
         simclr_config=dict(),
         ):
         super().__init__()
-
+        
+        self._remove_class_layers = remove_class_layers
         if not load_target_obj_detector:
             self._embed = _TransformerFeatures(latent_dim=latent_dim, demo_T=demo_T, dim_H=dim_H, dim_W=dim_W, **attn_cfg)
         else:
             # load target object detector module
             conf_file = OmegaConf.load(os.path.join(target_obj_detector_path, "config.yaml"))
-            self._embed = self._load_model(model_path=target_obj_detector_path, step=target_obj_detector_step, conf_file=conf_file, freeze=freeze_target_obj_detector)
+            self._embed, self._obj_classifier, self._target_obj_embedding = self._load_model(model_path=target_obj_detector_path, step=target_obj_detector_step, conf_file=conf_file, freeze=freeze_target_obj_detector, remove_class_layers=remove_class_layers)
 
-        if not load_target_obj_detector or not freeze_target_obj_detector:
+        if (not load_target_obj_detector or not freeze_target_obj_detector) and load_contrastive:
             self._target_embed = copy.deepcopy(self._embed)
             self._target_embed.load_state_dict(self._embed.state_dict())
             for p in self._target_embed.parameters():
@@ -352,8 +356,11 @@ class VideoImitation(nn.Module):
 
         self._load_target_obj_detector = load_target_obj_detector
         self._freeze_target_obj_detector = freeze_target_obj_detector
+        self._load_contrastive = load_contrastive
         self._demo_T = demo_T
+        self._obs_T = obs_T
         self._concat_state = concat_state
+        self._concat_target_obj_embedding = concat_target_obj_embedding
         # action processing
         assert action_cfg.n_mixtures >= 1, "must predict at least one mixture!"
         self.concat_demo_head = concat_demo_head
@@ -362,18 +369,21 @@ class VideoImitation(nn.Module):
         print("Concat-ing embedded demo to action head? {}, to distribution head? {}".format(concat_demo_act, concat_demo_head))
 
         # NOTE(Mandi): reduced input dimension size  from previous version! hence maybe try widen/add more action layers
-        ac_in_dim = int(latent_dim + float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
+        target_obj_embedding_dim = self._target_obj_embedding._modules['2'].out_features
+        ac_in_dim = int(latent_dim + float(concat_target_obj_embedding) * target_obj_embedding_dim + float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
+        
+        inv_input_dim = int(2*ac_in_dim )
         
         if action_cfg.n_layers == 1:
             self._action_module = nn.Sequential(nn.Linear(ac_in_dim, action_cfg.out_dim), nn.ReLU())
-            self._inv_model     = nn.Sequential(nn.Linear(2*ac_in_dim, action_cfg.out_dim), nn.ReLU())
+            self._inv_model     = nn.Sequential(nn.Linear(inv_input_dim, action_cfg.out_dim), nn.ReLU())
         elif action_cfg.n_layers == 2:
             self._action_module = nn.Sequential(
                 nn.Linear(ac_in_dim, action_cfg.hidden_dim), nn.ReLU(),
                 nn.Linear(action_cfg.hidden_dim, action_cfg.out_dim), nn.ReLU()
                 )
             self._inv_model     = nn.Sequential(
-                nn.Linear(2 * ac_in_dim, action_cfg.hidden_dim), nn.ReLU(),
+                nn.Linear(inv_input_dim, action_cfg.hidden_dim), nn.ReLU(),
                 nn.Linear(action_cfg.hidden_dim, action_cfg.out_dim), nn.ReLU()
                 )
         else:
@@ -405,29 +415,49 @@ class VideoImitation(nn.Module):
             # Remove classification layers
             if remove_class_layers:
                 # Take the first _TransformerFeatures
-                model = list(model.children())[0]
-            if freeze:
-                for param in model.parameters():
+                feature_extractor = list(model.children())[0]
+                obj_classifiers =  list(model.children())[-1]
+                # do not take the classification layer
+                target_obj_embedding_layers =  list(obj_classifiers.children())[:4] 
+                target_obj_embedding = nn.Sequential(*target_obj_embedding_layers)
+                for param in obj_classifiers.parameters():
                     param.requires_grad = False
-            return model
+                for param in target_obj_embedding.parameters():
+                    param.requires_grad = False
+            if freeze:
+                for param in feature_extractor.parameters():
+                    param.requires_grad = False
+
+            return feature_extractor, obj_classifiers, target_obj_embedding
         else:
             raise ValueError("Model path cannot be None")
 
 
-    def get_action(self, embed_out, ret_dist=True, states=None):
+    def get_action(self, embed_out, target_obj_embedding=None, ret_dist=True, states=None):
         """directly modifies output dict to put action outputs inside"""
         out = dict()
         ## single-head case
         demo_embed, img_embed   = embed_out['demo_embed'], embed_out['img_embed']
         assert demo_embed.shape[1] == self._demo_T
-        obs_T = img_embed.shape[1]
-        ac_in                   = img_embed
+        obs_T = self._obs_T #img_embed.shape[1]
+        
+        if self._concat_target_obj_embedding:
+            ac_in = img_embed[:, 1:, :]
+            states = states[:, 1:, :]
+        else:
+            ac_in = img_embed
+
         if self.demo_mean:
             demo_embed          = torch.mean(demo_embed, dim=1)
         else:
             demo_embed          = demo_embed[:, -1, :] # only take the last image, should alread be attended tho
         demo_embed              = repeat(demo_embed, 'B d -> B ob_T d', ob_T=obs_T)
 
+        if self._concat_target_obj_embedding:
+            target_obj_embedding = target_obj_embedding.repeat(1, self._obs_T, 1)
+            img_embed = img_embed[:, 1:, :]
+            img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
+            
         if self.concat_demo_act: # for action model 
             ac_in                 = torch.cat((img_embed, demo_embed), dim=2)
             ac_in               = F.normalize(ac_in, dim=2)
@@ -446,6 +476,25 @@ class VideoImitation(nn.Module):
         ## multi-head case? maybe register a name for each action head
         return out
 
+    def _compute_target_obj_embedding(self, embed_out):
+        # 1. Take embedding computed from the demo and the agent
+        # Take only the first frame for the agent scene
+        demo_embed, img_embed   = embed_out['demo_embed'], embed_out['img_embed'][:, 0, :][:, None, :]
+
+        assert demo_embed.shape[1] == self._demo_T
+        obs_T = img_embed.shape[1]
+        if self.demo_mean:
+            demo_embed          = torch.mean(demo_embed, dim=1)
+        else:
+                demo_embed          = demo_embed[:, -1, :] # only take the last image, should alread be attended tho
+        demo_embed              = repeat(demo_embed, 'B d -> B ob_T d', ob_T=obs_T)
+        ac_in                 = torch.cat((img_embed, demo_embed), dim=2)
+        ac_in               = F.normalize(ac_in, dim=2)
+
+        target_object_embedding = self._target_obj_embedding(ac_in)
+
+        return target_object_embedding
+
     def forward(
         self,
         images,
@@ -462,12 +511,17 @@ class VideoImitation(nn.Module):
         if not eval:
             assert images_cp is not None, 'Must pass in augmented version of images'
         embed_out = self._embed(images, context)
-        out = self.get_action(embed_out=embed_out, ret_dist=ret_dist, states=states)
+        
+        target_obj_embedding = None
+        if self._concat_target_obj_embedding:
+            target_obj_embedding = self._compute_target_obj_embedding(embed_out)
+        
+        out = self.get_action(embed_out=embed_out, target_obj_embedding=target_obj_embedding, ret_dist=ret_dist, states=states)
 
         if eval:
             return out # NOTE: early return here to do less computation during test time
  
-        if not self._load_target_obj_detector or not self._freeze_target_obj_detector:
+        if (not self._load_target_obj_detector or not self._freeze_target_obj_detector) and self._load_contrastive:
             # run frozen transformer on augmented images
             embed_out_target = self._target_embed(images_cp, context_cp)
 
@@ -482,8 +536,13 @@ class VideoImitation(nn.Module):
                 out[k] = v
 
         # run inverse model
-        demo_embed, img_embed        = out['demo_embed'], embed_out['img_embed'] # both are (B ob_T d)
-        inv_in                       = torch.cat((img_embed[:,:-1], img_embed[:,1:]), 2)  # B, T_im-1, d * 2
+        if self._concat_target_obj_embedding:
+            demo_embed, img_embed        = out['demo_embed'], embed_out['img_embed'][:, 1:, :] # both are (B ob_T d)
+            states = states[:, 1:, :]
+        else:
+            demo_embed, img_embed        = out['demo_embed'], embed_out['img_embed']
+            
+        inv_in = torch.cat((img_embed[:,:-1], img_embed[:,1:]), 2)  # B, T_im-1, d * 2
         if self.concat_demo_act:
             inv_in   = torch.cat(
                 (
@@ -491,6 +550,15 @@ class VideoImitation(nn.Module):
                 F.normalize(torch.cat((img_embed[:,  1:], demo_embed[:,:-1]), dim=2), dim=2),
                 ),
                 dim=2)
+            if self._concat_target_obj_embedding:
+                target_obj_embedding_inv = target_obj_embedding.repeat(1, inv_in.size(dim=1), 1)
+                inv_in   = torch.cat(
+                (
+                F.normalize(torch.cat((img_embed[:, :-1], demo_embed[:,:-1], target_obj_embedding_inv), dim=2), dim=2),
+                F.normalize(torch.cat((img_embed[:,  1:], demo_embed[:,:-1], target_obj_embedding_inv), dim=2), dim=2),
+                ),
+                dim=2)
+                
             # print(inv_in.shape)
         if self._concat_state:
             inv_in = torch.cat((torch.cat((inv_in, states[:, :-1]), dim=2), states[:, 1:]), dim=2)

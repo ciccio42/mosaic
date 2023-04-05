@@ -54,6 +54,7 @@ class MultiTaskPairedDataset(Dataset):
         split=[0.9, 0.1],
         demo_T=4,
         obs_T=7,
+        take_first_frame=False,
         aug_twice=True,
         width=180,
         height=100,
@@ -121,6 +122,8 @@ class MultiTaskPairedDataset(Dataset):
         self.object_distribution = OrderedDict()
         self.object_distribution_to_indx = OrderedDict()        
         
+        self._take_first_frame = take_first_frame
+
         for spec in tasks_spec:
             name, date      = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
@@ -413,7 +416,13 @@ class MultiTaskPairedDataset(Dataset):
             ret_dict['points'] = []
         end = len(traj)
         start = torch.randint(low=1, high=max(1, end - self._obs_T + 1 ), size=(1,))
-        chosen_t = [j + start for j in range(self._obs_T)]
+        
+        if self._take_first_frame:
+            first_frame = [torch.tensor(1)]
+            chosen_t = first_frame + [j + start for j in range(self._obs_T)]
+        else:
+            chosen_t = [j + start for j in range(self._obs_T)]
+
         if self.non_sequential:
             chosen_t = torch.randperm(end)
             chosen_t = chosen_t[chosen_t != 0][:self._obs_T]
@@ -436,7 +445,7 @@ class MultiTaskPairedDataset(Dataset):
                 state.append(_get_tensor(k, step_t))
             ret_dict['states'].append(np.concatenate(state).astype(np.float32)[None])
 
-            if j >= 1:  
+            if (j >= 1 and not self._take_first_frame) or (self._take_first_frame and j>=2):  
                 action = []
                 for k in action_keys:
                     action.append(_get_tensor(k, step_t))
