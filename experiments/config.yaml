@@ -1,6 +1,6 @@
 debug: False
-EXPERT_DATA:    '/home/ciccio/Desktop/multi_task_lfd/multitask_dataset/multitask_dataset_baseline' 
-save_path:      /home/ciccio/Desktop/multi_task_lfd/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+EXPERT_DATA:    '/kaggle/output/multitask_dataset_baseline' 
+save_path:      '/kaggle/output/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1'
 wandb_log: True 
 project_name: None
 log_freq:       1
