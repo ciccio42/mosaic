@@ -63,7 +63,7 @@ defaults:
   - tasks_cfgs:  7_tasks
 
 # dataset/loader/samplers
-loader_workers:   10
+loader_workers:   2
 samplers:        
   batch_size:         ${bsize}
   drop_last:          False
