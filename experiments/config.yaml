@@ -1,6 +1,6 @@
 debug: False
 EXPERT_DATA:    '../multitask_dataset_baseline/multitask_dataset' 
-save_path:      'mosaic-baseline-sav-folder/baseline-1'
+save_path:      '../mosaic-baseline-sav-folder/baseline-1'
 wandb_log: True 
 project_name: None
 log_freq:       1
