@@ -15,6 +15,7 @@ import wandb
 from copy import deepcopy
 from mosaic.utils.early_stopping import EarlyStopping
 from tqdm import tqdm
+import mosaic.models.mt_rep
 # from torch.utils.tensorboard import SummaryWriter
 # writer = SummaryWriter()
 
