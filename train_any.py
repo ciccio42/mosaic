@@ -111,9 +111,9 @@ class Trainer:
         if self.config.resume:
             epochs = self.config.epochs - \
                 int(self.config.resume_step/len(self._train_loader))
-            print(f"Remaining epochs {epochs}")
+            print(f"\n---- Remaining epochs {epochs} ----\n")
             self._step = int(self.config.resume_step)
-            print(f"Starting step {self._step}")
+            print(f"\n----Starting step {self._step} ----\n")
         else:
             epochs = self.train_cfg.get('epochs', 1)
             self._step = 0
@@ -147,110 +147,123 @@ class Trainer:
             frac = e / epochs
 
             for i, inputs in tqdm(enumerate(self._train_loader), total=len(self._train_loader), leave=False):
-                pass
-                #         tolog = {}
 
-                #         # Save stats
-                #         if (self._step % len(self._train_loader) == 0 ): # stats
-                #             stats_save_name = join(self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
-                #             json.dump({k: str(v) for k, v in raw_stats.items()}, open(stats_save_name, 'w'))
+                tolog = {}
 
-                #         optimizer.zero_grad()
-                #         #self.batch_distribution(inputs)
+                # Save stats
+                if (self._step % len(self._train_loader) == 0):  # stats
+                    stats_save_name = join(
+                        self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
+                    json.dump({k: str(v) for k, v in raw_stats.items()},
+                              open(stats_save_name, 'w'))
 
-                #         ## calculate loss here:
-                #         task_losses =  calculate_task_loss(self.config, self.train_cfg, self._device, model, inputs)
-                #         task_names = sorted(task_losses.keys())
-                #         weighted_task_loss = sum([l["loss_sum"] * task_loss_muls.get(name) for name, l in task_losses.items()])
-                #         weighted_task_loss.backward()
-                #         optimizer.step()
-                #         ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
-                #         # calculate train iter stats
-                #         if self._step % log_freq == 0:
-                #             train_print = collect_stats(self._step, task_losses, raw_stats, prefix='train')
-                #             if self.config.wandb_log:
-                #                 tolog['Train Step'] = self._step
-                #                 for task_name, losses in task_losses.items():
-                #                     for loss_name, loss_val in losses.items():
-                #                         tolog[f'train/{loss_name}/{task_name}'] = loss_val
-                #                         tolog[f'train/{task_name}/{loss_name}'] = loss_val
+                optimizer.zero_grad()
+                # self.batch_distribution(inputs)
 
-                #             if (self._step % len(self._train_loader) == 0):
-                #                 print('Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
-                #                 print(train_print)
+                # calculate loss here:
+                task_losses = calculate_task_loss(
+                    self.config, self.train_cfg, self._device, model, inputs)
+                task_names = sorted(task_losses.keys())
+                weighted_task_loss = sum(
+                    [l["loss_sum"] * task_loss_muls.get(name) for name, l in task_losses.items()])
+                weighted_task_loss.backward()
+                optimizer.step()
+                ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ## ##
+                # calculate train iter stats
+                if self._step % log_freq == 0:
+                    train_print = collect_stats(
+                        self._step, task_losses, raw_stats, prefix='train')
+                    if self.config.wandb_log:
+                        tolog['Train Step'] = self._step
+                        for task_name, losses in task_losses.items():
+                            for loss_name, loss_val in losses.items():
+                                tolog[f'train/{loss_name}/{task_name}'] = loss_val
+                                tolog[f'train/{task_name}/{loss_name}'] = loss_val
 
-                #         ####---- Validation step ----####
-                #         if (self._step % len(self._train_loader) == 0):
-                #             # exhaust all data in val loader and take avg loss
-                #             all_val_losses = {task: defaultdict(list) for task in task_names}
-                #             val_iter = iter(self._val_loader)
-                #             model = model.eval()
-                #             for val_inputs in val_iter:
-                #                 if self.config.use_daml: # allow grad!
-                #                     val_task_losses = calculate_task_loss(self.confg, self.train_cfg,  self._device, model, val_inputs)
-                #                 else:
-                #                     with torch.no_grad():
-                #                         val_task_losses = calculate_task_loss(self.config, self.train_cfg, self._device, model, val_inputs)
+                    if (self._step % len(self._train_loader) == 0):
+                        print(
+                            'Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
+                        print(train_print)
 
-                #                 for task, losses in val_task_losses.items():
-                #                     for k, v in losses.items():
-                #                         all_val_losses[task][k].append(v)
+                #### ---- Validation step ----####
+                if (self._step % len(self._train_loader) == 0):
+                    # exhaust all data in val loader and take avg loss
+                    all_val_losses = {task: defaultdict(
+                        list) for task in task_names}
+                    val_iter = iter(self._val_loader)
+                    model = model.eval()
+                    for val_inputs in val_iter:
+                        if self.config.use_daml:  # allow grad!
+                            val_task_losses = calculate_task_loss(
+                                self.confg, self.train_cfg,  self._device, model, val_inputs)
+                        else:
+                            with torch.no_grad():
+                                val_task_losses = calculate_task_loss(
+                                    self.config, self.train_cfg, self._device, model, val_inputs)
 
-                #             # take average across all batches in the val loader
-                #             avg_losses = dict()
-                #             for task, losses in all_val_losses.items():
-                #                 avg_losses[task] = {
-                #                     k: torch.mean(torch.stack(v)) for k, v in losses.items()}
+                        for task, losses in val_task_losses.items():
+                            for k, v in losses.items():
+                                all_val_losses[task][k].append(v)
 
-                #             if self.config.wandb_log:
-                #                 tolog['Validation Step'] = self._step
-                #                 for task_name, losses in avg_losses.items():
-                #                     for loss_name, loss_val in losses.items():
-                #                         tolog[f'val/{loss_name}/{task_name}'] = loss_val
-                #                         tolog[f'val/{task_name}/{loss_name}'] = loss_val
+                    # take average across all batches in the val loader
+                    avg_losses = dict()
+                    for task, losses in all_val_losses.items():
+                        avg_losses[task] = {
+                            k: torch.mean(torch.stack(v)) for k, v in losses.items()}
 
-                #             val_print = collect_stats(self._step, avg_losses, raw_stats, prefix='val')
-                #             if (self._step % len(self._train_loader) == 0):
-                #                 print('Validation step {}:'.format(self._step))
-                #                 print(val_print)
+                    if self.config.wandb_log:
+                        tolog['Validation Step'] = self._step
+                        for task_name, losses in avg_losses.items():
+                            for loss_name, loss_val in losses.items():
+                                tolog[f'val/{loss_name}/{task_name}'] = loss_val
+                                tolog[f'val/{task_name}/{loss_name}'] = loss_val
 
-                #             # compute the sum of validation losses
-                #             weighted_task_loss_val = sum([l["loss_sum"] * task_loss_muls.get(name) for name, l in avg_losses.items()])
-                #             if self.config.train_cfg.lr_schedule['type'] is not None:
-                #                 # perform lr-scheduling step
-                #                 scheduler.step(val_loss=weighted_task_loss_val)
-                #                 if self.config.wandb_log:
-                #                     # log learning-rate
-                #                         tolog['Validation Step'] = self._step
-                #                         tolog['learning_rate'] = scheduler._schedule.optimizer.param_groups[0]['lr']
+                    val_print = collect_stats(
+                        self._step, avg_losses, raw_stats, prefix='val')
+                    if (self._step % len(self._train_loader) == 0):
+                        print('Validation step {}:'.format(self._step))
+                        print(val_print)
 
-                #             # check for early stopping
-                #             self._early_stopping(weighted_task_loss_val, model, self._step, optimizer)
+                    # compute the sum of validation losses
+                    weighted_task_loss_val = sum(
+                        [l["loss_sum"] * task_loss_muls.get(name) for name, l in avg_losses.items()])
+                    if self.config.train_cfg.lr_schedule['type'] is not None:
+                        # perform lr-scheduling step
+                        scheduler.step(val_loss=weighted_task_loss_val)
+                        if self.config.wandb_log:
+                            # log learning-rate
+                            tolog['Validation Step'] = self._step
+                            tolog['learning_rate'] = scheduler._schedule.optimizer.param_groups[0]['lr']
 
-                #             model = model.train()
-                #             if self._early_stopping.early_stop:
-                #                 break
+                    # check for early stopping
+                    self._early_stopping(
+                        weighted_task_loss_val, model, self._step, optimizer)
 
-                #         if self.config.wandb_log:
-                #                 wandb.log(tolog)
+                    model = model.train()
+                    if self._early_stopping.early_stop:
+                        break
 
-                #         self._step += 1
-                #         try:
-                #             if not model._load_target_obj_detector or not model._freeze_target_obj_detector:
-                #                 # update target params
-                #                 mod = model.module if isinstance(model, nn.DataParallel) else model
-                #                 if self.train_cfg.target_update_freq > -1:
-                #                     mod.momentum_update(frac)
-                #                     if self._step % self.train_cfg.target_update_freq == 0:
-                #                         mod.soft_param_update()
-                #         except:
-                #             pass
-                #     if self._early_stopping.early_stop:
-                #         print("----Stop training for early-stopping----")
-                #         break
+                if self.config.wandb_log:
+                    wandb.log(tolog)
 
-                # ## when all epochs are done, save model one last time
-                # self.save_checkpoint(model, optimizer, weights_fn, save_fn)
+                self._step += 1
+                try:
+                    if not model._load_target_obj_detector or not model._freeze_target_obj_detector:
+                        # update target params
+                        mod = model.module if isinstance(
+                            model, nn.DataParallel) else model
+                        if self.train_cfg.target_update_freq > -1:
+                            mod.momentum_update(frac)
+                            if self._step % self.train_cfg.target_update_freq == 0:
+                                mod.soft_param_update()
+                except:
+                    pass
+            if self._early_stopping.early_stop:
+                print("----Stop training for early-stopping----")
+                break
+
+        # when all epochs are done, save model one last time
+        self.save_checkpoint(model, optimizer, weights_fn, save_fn)
 
         print(self._train_loader.dataset._selected_target_frame_distribution_task_object_target_position)
 

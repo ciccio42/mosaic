@@ -493,14 +493,14 @@ class VideoImitation(nn.Module):
         else:
             raise ValueError("Model path cannot be None")
 
-    def get_action(self, embed_out, target_obj_embedding=None, ret_dist=True, states=None):
+    def get_action(self, embed_out, target_obj_embedding=None, ret_dist=True, states=None, eval=False):
         """directly modifies output dict to put action outputs inside"""
         out = dict()
         # single-head case
         demo_embed, img_embed = embed_out['demo_embed'], embed_out['img_embed']
         assert demo_embed.shape[1] == self._demo_T
 
-        if self.training:
+        if not eval:
             obs_T = self._obs_T  # img_embed.shape[1]
         else:
             obs_T = img_embed.shape[1]
@@ -508,7 +508,7 @@ class VideoImitation(nn.Module):
         if self._concat_target_obj_embedding:
             ac_in = img_embed[:, 1:, :]
             states = states[:, 1:, :]
-        elif self._concat_target_obj_embedding and not self.training:
+        elif self._concat_target_obj_embedding and eval:
             ac_in = img_embed
             states = states
         else:
@@ -521,23 +521,13 @@ class VideoImitation(nn.Module):
             demo_embed = demo_embed[:, -1, :]
         demo_embed = repeat(demo_embed, 'B d -> B ob_T d', ob_T=obs_T)
 
-        if self._concat_target_obj_embedding and self.training:
+        if self._concat_target_obj_embedding and not eval:
             target_obj_embedding = target_obj_embedding.repeat(1, obs_T, 1)
             img_embed = img_embed[:, 1:, :]
             img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
-        elif self._concat_target_obj_embedding and not self.training:
+        elif self._concat_target_obj_embedding and eval:
             target_obj_embedding = target_obj_embedding.repeat(1, obs_T, 1)
             img_embed = img_embed
-            img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
-
-        if self.concat_demo_act:  # for action model
-            ac_in = torch.cat((img_embed, demo_embed), dim=2)
-            ac_in = F.normalize(ac_in, dim=2)
-        ac_in = torch.cat((ac_in, states), 2) if self._concat_state else ac_in
-        if self._concat_target_obj_embedding:
-            target_obj_embedding = target_obj_embedding.repeat(
-                1, self._obs_T, 1)
-            img_embed = img_embed[:, 1:, :]
             img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
 
         if self.concat_demo_act:  # for action model
@@ -598,20 +588,6 @@ class VideoImitation(nn.Module):
             assert images_cp is not None, 'Must pass in augmented version of images'
         embed_out = self._embed(images, context)
 
-        if not eval or target_obj_embedding == None:
-            # compute a new target obj embedding if the model is training or
-            # the target_obj_embedding is None (it is the firt frame during the test evaluation)
-            target_obj_embedding = None
-            if self._concat_target_obj_embedding:
-                target_obj_embedding = self._compute_target_obj_embedding(
-                    embed_out)
-
-        out = self.get_action(
-            embed_out=embed_out, target_obj_embedding=target_obj_embedding, ret_dist=ret_dist, states=states)
-
-        if self._concat_target_obj_embedding:
-            out["target_obj_embedding"] = target_obj_embedding
-
         if self._target_object_backbone is not None and not self._freeze_target_obj_detector:
             # compute the embedding for the first frame
             first_frame_batch = images[:, 0, :, :, :]
@@ -621,14 +597,16 @@ class VideoImitation(nn.Module):
         else:
             target_obj_embedding_in = embed_out
 
-        target_obj_embedding = None
-        if self._concat_target_obj_embedding:
+        if self._concat_target_obj_embedding and target_obj_embedding is None:
             # compute the target obj embedding, given the input from the first frame
             target_obj_embedding = self._compute_target_obj_embedding(
                 target_obj_embedding_in)
 
         out = self.get_action(
-            embed_out=embed_out, target_obj_embedding=target_obj_embedding, ret_dist=ret_dist, states=states)
+            embed_out=embed_out, target_obj_embedding=target_obj_embedding, ret_dist=ret_dist, states=states, eval=eval)
+
+        if self._concat_target_obj_embedding:
+            out["target_obj_embedding"] = target_obj_embedding
 
         if eval:
             return out  # NOTE: early return here to do less computation during test time
