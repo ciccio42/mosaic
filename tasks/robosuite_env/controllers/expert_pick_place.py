@@ -20,7 +20,8 @@ import robosuite.utils.transform_utils as T
 
 # in case rebuild is needed to use GPU render: sudo mkdir -p /usr/lib/nvidia-000
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-000
-# pip uninstall mujoco_py; pip install mujoco_py 
+# pip uninstall mujoco_py; pip install mujoco_py
+
 
 def _clip_delta(delta, max_step=0.015):
     norm_delta = np.linalg.norm(delta)
@@ -48,20 +49,24 @@ class PickPlaceController:
         self._object_name = self._env.objects[self._env.object_id].name
         # TODO this line violates abstraction barriers but so does the reference implementation in robosuite
         self._jpos_getter = lambda: np.array(self._env._joint_positions)
-        self._clearance = 0.03 #if 'milk' not in self._object_name else -0.01
+        self._clearance = 0.03  # if 'milk' not in self._object_name else -0.01
 
         if "Sawyer" in self._env.robot_names:
             self._obs_name = 'eef_pos'
             self._default_speed = 0.13
             self._final_thresh = 1e-2
-            self._target_gripper_wrt_obj_rot = np.array([[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
+            self._target_gripper_wrt_obj_rot = np.array(
+                [[1, 0, 0.], [0, -1, 0.], [0., 0., -1.]])
+            self._base_quat = Quaternion(matrix=np.reshape(
+                self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3, 3)))
         elif "Panda" in self._env.robot_names:
             self._obs_name = 'eef_pos'
             self._default_speed = 0.13
             self._final_thresh = 6e-2
-            self._target_gripper_wrt_obj_rot = np.array([[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
-            self._base_quat = Quaternion(matrix=np.reshape(self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3,3)))
+            self._target_gripper_wrt_obj_rot = np.array(
+                [[0, 1, 0.], [1, 0, 0.], [0., 0., -1.]])
+            self._base_quat = Quaternion(matrix=np.reshape(
+                self._env.sim.data.site_xmat[self._env.robots[0].eef_site_id], (3, 3)))
         else:
             raise NotImplementedError
 
@@ -70,10 +75,11 @@ class PickPlaceController:
         self._hover_delta = 0.20
         self._obj_thr = 0.10
 
-
     def _object_in_hand(self, obs):
-        dist_panda = {'milk': 0.018, 'can': 0.018, 'cereal': 0.018, 'bread': 0.018}
-        dist_sawyer = {'milk': 0.018, 'can': 0.018, 'cereal': 0.018, 'bread': 0.018}
+        dist_panda = {'milk': 0.018, 'can': 0.018,
+                      'cereal': 0.018, 'bread': 0.018}
+        dist_sawyer = {'milk': 0.018, 'can': 0.018,
+                       'cereal': 0.018, 'bread': 0.018}
         if "Panda" in self._env.robot_names:
             dist = dist_panda
         else:
@@ -100,27 +106,33 @@ class PickPlaceController:
         return normalize_action(np.concatenate((delta_pos + base_pos, aa)), self.ranges)
 
     def act(self, obs):
-        self._target_loc = np.array(self._env.sim.data.body_xpos[self._env.bin_bodyid]) + [0, 0, 0.3]
+        self._target_loc = np.array(
+            self._env.sim.data.body_xpos[self._env.bin_bodyid]) + [0, 0, 0.3]
         status = 'start'
         if self._t == 0:
             self._start_grasp = -1
             self._finish_grasp = False
             try:
-                y = -(obs['{}_pos'.format(self._object_name)][1] - obs[self._obs_name][1])
-                x = obs['{}_pos'.format(self._object_name)][0] - obs[self._obs_name][0]
+                y = -(obs['{}_pos'.format(self._object_name)]
+                      [1] - obs[self._obs_name][1])
+                x = obs['{}_pos'.format(self._object_name)
+                        ][0] - obs[self._obs_name][0]
             except:
-                import pdb;
+                import pdb
                 pdb.set_trace()
-            angle = np.arctan2(y, x) #- np.pi / 3 if 'cereal' in self._object_name else np.arctan2(y, x)
+            # - np.pi / 3 if 'cereal' in self._object_name else np.arctan2(y, x)
+            angle = np.arctan2(y, x)
             self._target_quat = self._calculate_quat(obs)
         if self._start_grasp < 0 and self._t < 15:
             if np.linalg.norm(obs['{}_pos'.format(self._object_name)] - obs[self._obs_name] + [0, 0,
                                                                                                self._hover_delta]) < self._g_tol or self._t == 14:
                 self._start_grasp = self._t
 
-            quat_t = Quaternion.slerp(self._base_quat, self._target_quat, min(1, float(self._t) / 20))
+            quat_t = Quaternion.slerp(
+                self._base_quat, self._target_quat, min(1, float(self._t) / 20))
             eef_pose = self._get_target_pose(
-                obs['{}_pos'.format(self._object_name)] - obs[self._obs_name] + [0, 0, self._hover_delta],
+                obs['{}_pos'.format(self._object_name)] -
+                obs[self._obs_name] + [0, 0, self._hover_delta],
                 obs['eef_pos'], quat_t)
             action = np.concatenate((eef_pose, [-1]))
             status = 'prepare_grasp'
@@ -128,7 +140,8 @@ class PickPlaceController:
         elif self._t < self._start_grasp + 30 and not self._finish_grasp:
             if not self._object_in_hand(obs):
                 eef_pose = self._get_target_pose(
-                    obs['{}_pos'.format(self._object_name)] - obs[self._obs_name] - [0, 0, self._clearance],
+                    obs['{}_pos'.format(self._object_name)] -
+                    obs[self._obs_name] - [0, 0, self._clearance],
                     obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [-1]))
                 self.object_pos = obs['{}_pos'.format(self._object_name)]
@@ -144,17 +157,20 @@ class PickPlaceController:
         elif np.linalg.norm(
                 self._target_loc - obs[self._obs_name]) > self._final_thresh and not self._intermediate_reached:
             target = self._target_loc
-            eef_pose = self._get_target_pose(target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
+            eef_pose = self._get_target_pose(
+                target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [1]))
             status = 'moving'
         else:
             self._intermediate_reached = True
             if np.linalg.norm(self._target_loc - [0, 0, 0.12] - obs[self._obs_name]) > self._final_thresh:
                 target = self._target_loc - [0, 0, 0.12]
-                eef_pose = self._get_target_pose(target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
+                eef_pose = self._get_target_pose(
+                    target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [1]))
             else:
-                eef_pose = self._get_target_pose(np.zeros(3), obs['eef_pos'], self._target_quat)
+                eef_pose = self._get_target_pose(
+                    np.zeros(3), obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [-1]))
             status = 'placing'
 
@@ -164,7 +180,8 @@ class PickPlaceController:
 
 def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False,
                           seed=None, env_seed=None, depth=False, heights=100, widths=200, gpu_id=0, **kwargs):
-    assert 'gpu' in str(mujoco_py.cymj), 'Make sure to render with GPU to make eval faster'
+    assert 'gpu' in str(
+        mujoco_py.cymj), 'Make sure to render with GPU to make eval faster'
     # reassign the gpu id
     visible_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
     gpu_id = int(visible_ids[gpu_id])
@@ -174,9 +191,11 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
     seed_offset = sum([int(a) for a in bytes(env_type, 'ascii')])
     np.random.seed(env_seed)
     if 'Sawyer' in env_type:
-        action_ranges = np.array([[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
+        action_ranges = np.array(
+            [[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
     else:
-        action_ranges = np.array([[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]]  )
+        action_ranges = np.array(
+            [[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]])
     success, use_object = False, None
     if task is not None:
         assert 0 <= task <= 15, "task should be in [0, 15]"
@@ -209,7 +228,8 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         except RandomizationError:
             pass
     while not success:
-        controller = PickPlaceController(env.env, tries=tries, ranges=action_ranges)
+        controller = PickPlaceController(
+            env.env, tries=tries, ranges=action_ranges)
         np.random.seed(seed + int(tries) + seed_offset)
         while True:
             try:
@@ -230,7 +250,8 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         for t in range(int(env.horizon // 10)):
             action, status = controller.act(obs)
             obs, reward, done, info = env.step(action)
-            assert 'status' not in info.keys(), "Don't overwrite information returned from environment. "
+            assert 'status' not in info.keys(
+            ), "Don't overwrite information returned from environment. "
             info['status'] = status
             if renderer:
                 env.render()
@@ -252,5 +273,5 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
 if __name__ == '__main__':
     config = load_controller_config(default_controller='IK_POSE')
     for i in range(0, 16):
-        traj = get_expert_trajectory('SawyerPickPlaceDistractor', config, renderer=True, camera_obs=False, task=i,
-                                 render_camera='frontview')
+        traj = get_expert_trajectory('PandaPickPlaceDistractor', config, renderer=True, camera_obs=False, task=i,
+                                     render_camera='frontview')

@@ -32,7 +32,8 @@ class InsertController:
 
     def _calculate_quat(self, angle):
         if "Sawyer" in self._env.robot_names:
-            new_rot = np.array([[np.cos(angle), -np.sin(angle), 0], [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
+            new_rot = np.array([[np.cos(angle), -np.sin(angle), 0],
+                               [np.sin(angle), np.cos(angle), 0], [0, 0, 1]])
             return Quaternion(matrix=self._base_rot.dot(new_rot))
         return self._base_quat
 
@@ -96,7 +97,7 @@ class InsertController:
                 y = -(obs['target_obj_pos'][1] - 0.02 - obs[self._obs_name][1])
                 x = obs['target_obj_pos'][0] - obs[self._obs_name][0]
             except:
-                import pdb;
+                import pdb
                 pdb.set_trace()
             angle = np.arctan2(y, x)
             self._target_quat = self._calculate_quat(angle)
@@ -105,16 +106,19 @@ class InsertController:
             if np.linalg.norm(obs['target_obj_pos']-[0, 0.02, 0] - obs[self._obs_name] + [0, 0, self._hover_delta]) < self._g_tol or self._t == 14:
                 self._start_grasp = self._t
 
-            quat_t = Quaternion.slerp(self._base_quat, self._target_quat, min(1, float(self._t) / 5))
+            quat_t = Quaternion.slerp(
+                self._base_quat, self._target_quat, min(1, float(self._t) / 5))
             eef_pose = self._get_target_pose(
-                obs['target_obj_pos'] - [0, 0.02, 0] - obs[self._obs_name] + [0, 0, self._get_target()[2]],
+                obs['target_obj_pos'] - [0, 0.02, 0] -
+                obs[self._obs_name] + [0, 0, self._get_target()[2]],
                 obs['eef_pos'], quat_t)
             action = np.concatenate((eef_pose, [-1]))
 
         elif self._t < self._start_grasp + 35 and not self._finish_grasp:
             if not self._object_in_hand(obs):
                 eef_pose = self._get_target_pose(
-                    obs['target_obj_pos']- [0, 0.02, 0]  - obs[self._obs_name] - [0, 0, self._clearance],
+                    obs['target_obj_pos'] - [0, 0.02, 0] -
+                    obs[self._obs_name] - [0, 0, self._clearance],
                     obs['eef_pos'], self._target_quat)
                 action = np.concatenate((eef_pose, [-1]))
                 self.object_pos = obs['target_obj_pos']
@@ -127,10 +131,12 @@ class InsertController:
 
         elif np.linalg.norm(self._get_target() - obs[self._obs_name]) > self._final_thresh and self._object_in_hand(obs):
             target = self._get_target()
-            eef_pose = self._get_target_pose(target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
+            eef_pose = self._get_target_pose(
+                target - obs[self._obs_name], obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [1]))
         else:
-            eef_pose = self._get_target_pose(np.zeros(3), obs['eef_pos'], self._target_quat)
+            eef_pose = self._get_target_pose(
+                np.zeros(3), obs['eef_pos'], self._target_quat)
             action = np.concatenate((eef_pose, [-1]))
         self._t += 1
         return action
@@ -142,11 +148,12 @@ class InsertController:
 def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=True, task=None, ret_env=False,
                           seed=None, env_seed=None, depth=False, **kwargs):
 
-
     if 'Sawyer' in env_type:
-        action_ranges = np.array([[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-5, 5], [-5, 5], [-5, 5]])
+        action_ranges = np.array(
+            [[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-5, 5], [-5, 5], [-5, 5]])
     else:
-        action_ranges = np.array([[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]])
+        action_ranges = np.array(
+            [[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]])
 
     success, use_object = False, None
     if task is not None:
@@ -160,8 +167,7 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
                 env = get_env(env_type, box_id=box_id, hole_id=hole_id, controller_configs=controller_type,
                               has_renderer=renderer, has_offscreen_renderer=camera_obs,
                               reward_shaping=False, use_camera_obs=camera_obs, camera_heights=320, camera_widths=320,
-                              camera_depths=depth, ranges=action_ranges, camera_names="agentview"
-                              , **kwargs)
+                              camera_depths=depth, ranges=action_ranges, camera_names="agentview", **kwargs)
                 break
             except RandomizationError:
                 pass
@@ -179,7 +185,8 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         except RandomizationError:
             pass
     while not success:
-        controller = InsertController(env.env, tries=tries, ranges=action_ranges)
+        controller = InsertController(
+            env.env, tries=tries, ranges=action_ranges)
 
         while True:
             try:

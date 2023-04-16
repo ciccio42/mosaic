@@ -439,11 +439,18 @@ class VideoImitation(nn.Module):
         ## single-head case
         demo_embed, img_embed   = embed_out['demo_embed'], embed_out['img_embed']
         assert demo_embed.shape[1] == self._demo_T
-        obs_T = self._obs_T #img_embed.shape[1]
         
-        if self._concat_target_obj_embedding:
+        if  self.training:
+            obs_T = self._obs_T #img_embed.shape[1]
+        else:
+            obs_T = img_embed.shape[1]
+
+        if self._concat_target_obj_embedding and self.training:
             ac_in = img_embed[:, 1:, :]
             states = states[:, 1:, :]
+        elif self._concat_target_obj_embedding and not self.training:
+            ac_in = img_embed
+            states = states
         else:
             ac_in = img_embed
 
@@ -453,11 +460,15 @@ class VideoImitation(nn.Module):
             demo_embed          = demo_embed[:, -1, :] # only take the last image, should alread be attended tho
         demo_embed              = repeat(demo_embed, 'B d -> B ob_T d', ob_T=obs_T)
 
-        if self._concat_target_obj_embedding:
-            target_obj_embedding = target_obj_embedding.repeat(1, self._obs_T, 1)
+        if self._concat_target_obj_embedding and self.training:
+            target_obj_embedding = target_obj_embedding.repeat(1, obs_T, 1)
             img_embed = img_embed[:, 1:, :]
             img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
-            
+        elif self._concat_target_obj_embedding and not self.training:
+            target_obj_embedding = target_obj_embedding.repeat(1, obs_T, 1)
+            img_embed = img_embed
+            img_embed = torch.cat((img_embed, target_obj_embedding), dim=2)
+
         if self.concat_demo_act: # for action model 
             ac_in                 = torch.cat((img_embed, demo_embed), dim=2)
             ac_in               = F.normalize(ac_in, dim=2)
@@ -505,6 +516,7 @@ class VideoImitation(nn.Module):
         images_cp=None,
         context_cp=None,
         actions=None,
+        target_obj_embedding=None
         ):
         B, obs_T, _, height, width = images.shape
         demo_T = context.shape[1]
@@ -512,11 +524,17 @@ class VideoImitation(nn.Module):
             assert images_cp is not None, 'Must pass in augmented version of images'
         embed_out = self._embed(images, context)
         
-        target_obj_embedding = None
-        if self._concat_target_obj_embedding:
-            target_obj_embedding = self._compute_target_obj_embedding(embed_out)
+        if not eval or target_obj_embedding == None:
+            # compute a new target obj embedding if the model is training or 
+            # the target_obj_embedding is None (it is the firt frame during the test evaluation)
+            target_obj_embedding = None
+            if self._concat_target_obj_embedding:
+                target_obj_embedding = self._compute_target_obj_embedding(embed_out)
         
         out = self.get_action(embed_out=embed_out, target_obj_embedding=target_obj_embedding, ret_dist=ret_dist, states=states)
+        
+        if self._concat_target_obj_embedding:
+            out["target_obj_embedding"] = target_obj_embedding
 
         if eval:
             return out # NOTE: early return here to do less computation during test time
