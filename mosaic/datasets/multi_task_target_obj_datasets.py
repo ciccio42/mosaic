@@ -11,9 +11,9 @@ from torchvision.transforms import RandomAffine, ToTensor, Normalize, \
 from torchvision.transforms.functional import resized_crop
 
 import pickle as pkl
-from collections import defaultdict, OrderedDict 
-import glob 
-import numpy as np 
+from collections import defaultdict, OrderedDict
+import glob
+import numpy as np
 import matplotlib.pyplot as plt
 import copy
 from copy import deepcopy
@@ -21,51 +21,54 @@ from functools import reduce
 from operator import concat
 
 ENV_OBJECTS = {
-    'pick_place':{
+    'pick_place': {
         'obj_names': ['milk', 'bread', 'cereal', 'can'],
         'ranges':  [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
     },
-    'nut_assembly':{
-        'obj_names': ['nut0', 'nut1', 'nut2'],        
+    'nut_assembly': {
+        'obj_names': ['nut0', 'nut1', 'nut2'],
         'ranges': [[0.10, 0.31], [-0.10, 0.10], [-0.31, -0.10]]
     }
 }
 
-JITTER_FACTORS = {'brightness': 0.4, 'contrast': 0.4, 'saturation': 0.4, 'hue': 0.1} 
+JITTER_FACTORS = {'brightness': 0.4,
+                  'contrast': 0.4, 'saturation': 0.4, 'hue': 0.1}
+
 
 def collate_by_task(batch):
     """ Use this for validation: groups data by task names to compute per-task losses """
     per_task_data = defaultdict(list)
     for b in batch:
         per_task_data[b['task_name']].append(
-            {k:v for k, v in b.items() if k != 'task_name' and k != 'task_id'}
+            {k: v for k, v in b.items() if k != 'task_name' and k != 'task_id'}
         )
 
     for name, data in per_task_data.items():
         per_task_data[name] = default_collate(data)
     return per_task_data
 
+
 class MultiTaskPairedTargetObjDataset(Dataset):
     def __init__(
-        self,
-        tasks_spec,
-        root_dir='mosaic_multitask_dataset',
-        mode='train',
-        split=[0.9, 0.1],
-        aug_twice=True,
-        width=180,
-        height=100,
-        demo_T=4, 
-        obs_T=1,
-        data_augs=None,
-        non_sequential=False,
-        allow_val_skip=False,
-        allow_train_skip=False,
-        use_strong_augs=False,
-        aux_pose=False,
-        select_random_frames=True,
-        compute_obj_distribution=False,
-        **params):
+            self,
+            tasks_spec,
+            root_dir='mosaic_multitask_dataset',
+            mode='train',
+            split=[0.9, 0.1],
+            aug_twice=True,
+            width=180,
+            height=100,
+            demo_T=4,
+            obs_T=1,
+            data_augs=None,
+            non_sequential=False,
+            allow_val_skip=False,
+            allow_train_skip=False,
+            use_strong_augs=False,
+            aux_pose=False,
+            select_random_frames=True,
+            compute_obj_distribution=False,
+            **params):
         """
         Args:
         -  root_dir:
@@ -103,66 +106,74 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         -   non_sequential：
                 whether to take strides when we sample， note if we do this then inverse dynamics loss is invalid
         """
-        self.task_crops     = OrderedDict()
-        self.all_file_pairs = OrderedDict() # each idx i maps to a unique tuple of (task_name, sub_task_id, agent.pkl, demo.pkl)
-        count               = 0
-        self.task_to_idx    = defaultdict(list)
+        self.task_crops = OrderedDict()
+        # each idx i maps to a unique tuple of (task_name, sub_task_id, agent.pkl, demo.pkl)
+        self.all_file_pairs = OrderedDict()
+        count = 0
+        self.task_to_idx = defaultdict(list)
         self.subtask_to_idx = OrderedDict()
         self.agent_files = dict()
         self.demo_files = dict()
         self.mode = mode
         self._demo_T = demo_T
         self._obs_T = obs_T
-        
+
         self.select_random_frames = select_random_frames
         self.compute_obj_distribution = compute_obj_distribution
         self.object_distribution = OrderedDict()
-        self.object_distribution_to_indx = OrderedDict()        
+        self.object_distribution_to_indx = OrderedDict()
         self.index_to_slot = OrderedDict()
 
         for spec in tasks_spec:
-            name, date      = spec.get('name', None), spec.get('date', None)
+            name, date = spec.get('name', None), spec.get('date', None)
             assert name, 'need to specify the task name for data generated, for easier tracking'
-            self.agent_files[name]=dict()
-            self.demo_files[name]=dict()
+            self.agent_files[name] = dict()
+            self.demo_files[name] = dict()
 
-            self.object_distribution[name]=OrderedDict()
-            self.object_distribution_to_indx[name]=OrderedDict()
-            
+            self.object_distribution[name] = OrderedDict()
+            self.object_distribution_to_indx[name] = OrderedDict()
+
             if mode == 'train':
-                print("Loading task [{:<9}] saved on date {}".format(name, date))
+                print(
+                    "Loading task [{:<9}] saved on date {}".format(name, date))
             if date is None:
-                agent_dir       = join(root_dir, name, 'panda_{}'.format(name))
-                demo_dir        = join(root_dir, name, 'sawyer_{}'.format(name))
+                agent_dir = join(root_dir, name, 'panda_{}'.format(name))
+                demo_dir = join(root_dir, name, 'sawyer_{}'.format(name))
             else:
-                agent_dir       = join(root_dir, name, '{}_panda_{}'.format(date, name))
-                demo_dir        = join(root_dir, name, '{}_sawyer_{}'.format(date, name))
+                agent_dir = join(
+                    root_dir, name, '{}_panda_{}'.format(date, name))
+                demo_dir = join(
+                    root_dir, name, '{}_sawyer_{}'.format(date, name))
             self.subtask_to_idx[name] = defaultdict(list)
             for _id in range(spec.get('n_tasks')):
                 if _id in spec.get('skip_ids', []):
                     if (allow_train_skip and mode == 'train') or (allow_val_skip and mode == 'val'):
-                        print('Warning! Excluding subtask id {} from loaded **{}** dataset for task {}'.format(_id, mode, name))
+                        print(
+                            'Warning! Excluding subtask id {} from loaded **{}** dataset for task {}'.format(_id, mode, name))
                         continue
-                task_id     = 'task_{:02d}'.format(_id)
-                task_dir    = expanduser(join(agent_dir,  task_id, '*.pkl'))
+                task_id = 'task_{:02d}'.format(_id)
+                task_dir = expanduser(join(agent_dir,  task_id, '*.pkl'))
                 agent_files = sorted(glob.glob(task_dir))
-                assert len(agent_files) != 0, "Can't find dataset for task {}, subtask {} in dir {}".format(name, _id, task_dir)
+                assert len(agent_files) != 0, "Can't find dataset for task {}, subtask {} in dir {}".format(
+                    name, _id, task_dir)
                 subtask_size = spec.get('traj_per_subtask', 100)
-                assert len(agent_files) >= subtask_size, "Doesn't have enough data "+str(len(agent_files))
+                assert len(
+                    agent_files) >= subtask_size, "Doesn't have enough data "+str(len(agent_files))
                 agent_files = agent_files[:subtask_size]
 
-                ## prev. version does split randomly, here we strictly split each subtask in the same split ratio:
-                idxs        = split_files(len(agent_files), split, mode)
+                # prev. version does split randomly, here we strictly split each subtask in the same split ratio:
+                idxs = split_files(len(agent_files), split, mode)
                 agent_files = [agent_files[i] for i in idxs]
 
-                task_dir    = expanduser(join(demo_dir, task_id, '*.pkl'))
+                task_dir = expanduser(join(demo_dir, task_id, '*.pkl'))
 
-                demo_files  = sorted(glob.glob(task_dir))
+                demo_files = sorted(glob.glob(task_dir))
                 subtask_size = spec.get('demo_per_subtask', 100)
-                assert len(demo_files) >= subtask_size, "Doesn't have enough data "+str(len(demo_files))
-                demo_files  = demo_files[:subtask_size]
-                idxs        = split_files(len(demo_files), split, mode)
-                demo_files  = [demo_files[i] for i in idxs]
+                assert len(
+                    demo_files) >= subtask_size, "Doesn't have enough data "+str(len(demo_files))
+                demo_files = demo_files[:subtask_size]
+                idxs = split_files(len(demo_files), split, mode)
+                demo_files = [demo_files[i] for i in idxs]
                 # assert len(agent_files) == len(demo_files), \
                 #     'data for task {}, subtask #{} is not matched'.format(name, task_id)
 
@@ -170,7 +181,8 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                 self.demo_files[name][_id] = deepcopy(demo_files)
 
                 self.object_distribution[name][task_id] = OrderedDict()
-                self.object_distribution_to_indx[name][task_id] = [[] for i in range(len(ENV_OBJECTS[name]['ranges']))]
+                self.object_distribution_to_indx[name][task_id] = [
+                    [] for i in range(len(ENV_OBJECTS[name]['ranges']))]
                 if self.compute_obj_distribution:
                     # for each subtask, create a dict with the object name
                     # assign the slot at each file
@@ -187,7 +199,8 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                             for id, obj_name in enumerate(ENV_OBJECTS[name]['obj_names']):
                                 if id == target_obj_id:
                                     if obj_name not in self.object_distribution[name][task_id]:
-                                        self.object_distribution[name][task_id][obj_name] = OrderedDict()
+                                        self.object_distribution[name][task_id][obj_name] = OrderedDict(
+                                        )
                                     # get object position
                                     if name == 'nut_assembly':
                                         if id == 0:
@@ -195,10 +208,10 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                                         else:
                                             pos = trj[1]['obs'][f'round-nut-{id+1}_pos']
                                     else:
-                                        pos = trj[1]['obs'][f'{obj_name}_pos']        
+                                        pos = trj[1]['obs'][f'{obj_name}_pos']
                                     for i, pos_range in enumerate(ENV_OBJECTS[name]["ranges"]):
-                                        if pos[1] >= pos_range[0] and pos[1] <= pos_range[1]: 
-                                            self.object_distribution[name][task_id][obj_name][agent]=i
+                                        if pos[1] >= pos_range[0] and pos[1] <= pos_range[1]:
+                                            self.object_distribution[name][task_id][obj_name][agent] = i
                                             break
                                     break
 
@@ -214,19 +227,20 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                                 if agent in self.object_distribution[name][task_id][obj]:
                                     slot_indx = self.object_distribution[name][task_id][obj][agent]
                                     # assign the slot for the given agent file
-                                    self.object_distribution_to_indx[name][task_id][slot_indx].append(count)
-                                    self.index_to_slot[count]=slot_indx
+                                    self.object_distribution_to_indx[name][task_id][slot_indx].append(
+                                        count)
+                                    self.index_to_slot[count] = slot_indx
                         count += 1
-        
-            self.task_crops[name] = spec.get('crop', [0,0,0,0])    
-        
+
+            self.task_crops[name] = spec.get('crop', [0, 0, 0, 0])
+
         print('Done loading Task {}, agent/demo trajctores pairs reach a count of: {}'.format(name, count))
         self.pairs_count = count
         self.task_count = len(tasks_spec)
 
         self.width, self.height = width, height
         self.aug_twice = aug_twice
-        self.aux_pose  = aux_pose
+        self.aux_pose = aux_pose
 
         self.non_sequential = non_sequential
         if non_sequential:
@@ -235,28 +249,32 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         assert data_augs, 'Must give some basic data-aug parameters'
         if mode == 'train':
             print('Data aug parameters:', data_augs)
-        #self.randAffine = RandomAffine(degrees=0, translate=(data_augs.get('rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
+        # self.randAffine = RandomAffine(degrees=0, translate=(data_augs.get('rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
         self.toTensor = ToTensor()
-        self.normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        jitters = {k: v * data_augs.get('weak_jitter', 0) for k,v in JITTER_FACTORS.items()}
+        self.normalize = Normalize(
+            mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        jitters = {k: v * data_augs.get('weak_jitter', 0)
+                   for k, v in JITTER_FACTORS.items()}
         weak_jitter = ColorJitter(**jitters)
 
         weak_scale = data_augs.get('weak_crop_scale', (0.8, 1.0))
         weak_ratio = data_augs.get('weak_crop_ratio', (1.6, 1.8))
-        randcrop   = RandomResizedCrop(size=(height, width), scale=weak_scale, ratio=weak_ratio)
+        randcrop = RandomResizedCrop(
+            size=(height, width), scale=weak_scale, ratio=weak_ratio)
         if data_augs.use_affine:
-            randcrop = RandomAffine(degrees=0, translate=(data_augs.get('rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
-        self.transforms = transforms.Compose([ # normalize at the end
+            randcrop = RandomAffine(degrees=0, translate=(data_augs.get(
+                'rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
+        self.transforms = transforms.Compose([  # normalize at the end
             RandomApply([weak_jitter], p=0.1),
             RandomApply(
-                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0))) ], p=0.1),
+                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.1),
             randcrop,
             self.normalize])
 
-
         self.use_strong_augs = use_strong_augs
         print("Using strong augmentations?", use_strong_augs)
-        jitters = {k: v * data_augs.get('strong_jitter', 0) for k,v in JITTER_FACTORS.items()}
+        jitters = {k: v * data_augs.get('strong_jitter', 0)
+                   for k, v in JITTER_FACTORS.items()}
         strong_jitter = ColorJitter(**jitters)
         self.grayscale = RandomGrayscale(data_augs.get("grayscale", 0))
         strong_scale = data_augs.get('strong_crop_scale', (0.2, 0.76))
@@ -266,22 +284,24 @@ class MultiTaskPairedTargetObjDataset(Dataset):
             self.grayscale,
             RandomHorizontalFlip(p=data_augs.get('flip', 0)),
             RandomApply(
-                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0))) ], p=0.01),
+                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.01),
             RandomResizedCrop(
                 size=(height, width), scale=strong_scale, ratio=strong_ratio),
             self.normalize,
-            ])
+        ])
 
         def frame_aug(task_name, obs, second=False):
             """applies to every timestep's RGB obs['image']"""
-            crop_params = self.task_crops.get(task_name, [0,0,0,0])
+            crop_params = self.task_crops.get(task_name, [0, 0, 0, 0])
             top, left = crop_params[0], crop_params[2]
             img_height, img_width = obs.shape[0], obs.shape[1]
-            box_h, box_w = img_height - top - crop_params[1], img_width - left - crop_params[3]
+            box_h, box_w = img_height - top - \
+                crop_params[1], img_width - left - crop_params[3]
 
             obs = self.toTensor(obs)
             # only this resize+crop is task-specific
-            obs = resized_crop(obs, top=top, left=left, height=box_h, width=box_w, size=(self.height, self.width))
+            obs = resized_crop(obs, top=top, left=left, height=box_h,
+                               width=box_w, size=(self.height, self.width))
 
             if self.use_strong_augs and second:
                 augmented = self.strong_augs(obs)
@@ -291,7 +311,6 @@ class MultiTaskPairedTargetObjDataset(Dataset):
 
             return augmented
         self.frame_aug = frame_aug
-
 
     def __len__(self):
         """NOTE: we should count total possible demo-agent pairs, not just single-file counts
@@ -303,7 +322,8 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         an index to a proper sub-task index """
         if self.mode == 'train':
             pass
-        (task_name, sub_task_id, demo_file, agent_file) = self.all_file_pairs[idx]
+        (task_name, sub_task_id, demo_file,
+         agent_file) = self.all_file_pairs[idx]
         demo_traj, agent_traj = load_traj(demo_file), load_traj(agent_file)
         demo_data = self._make_demo(demo_traj, task_name)
         traj = self._make_traj(agent_traj, task_name, idx)
@@ -314,7 +334,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         Do a near-uniform sampling of the demonstration trajectory
         """
         if self.select_random_frames:
-            clip = lambda x : int(max(0, min(x, len(traj) - 1)))
+            def clip(x): return int(max(0, min(x, len(traj) - 1)))
             per_bracket = max(len(traj) / self._demo_T, 1)
             frames = []
             cp_frames = []
@@ -325,10 +345,11 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                 elif i == 0:
                     n = 0
                 else:
-                    n = clip(np.random.randint(int(i * per_bracket), int((i + 1) * per_bracket)))
-                #frames.append(_make_frame(n))
+                    n = clip(np.random.randint(
+                        int(i * per_bracket), int((i + 1) * per_bracket)))
+                # frames.append(_make_frame(n))
                 # convert from BGR to RGB and scale to 0-1 range
-                obs = copy.copy(traj.get(n)['obs']['image'][:,:,::-1]/255)
+                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1]/255)
                 processed = self.frame_aug(task_name, obs)
                 frames.append(processed)
                 if self.aug_twice:
@@ -349,7 +370,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                     for t in range(1, len(traj)):
                         state = traj.get(t)['info']['status']
                         trj_t = traj.get(t)
-                        gripper_act = trj_t['action'][-1] 
+                        gripper_act = trj_t['action'][-1]
                         if state == 'obj_in_hand' and gripper_act == 1:
                             obj_in_hand = t
                             n = t
@@ -368,7 +389,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                     n = start_moving + int((end_moving-start_moving)/2)
 
                 # convert from BGR to RGB and scale to 0-1 range
-                obs = copy.copy(traj.get(n)['obs']['image'][:,:,::-1]/255)
+                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1]/255)
 
                 processed = self.frame_aug(task_name, obs)
                 frames.append(processed)
@@ -379,7 +400,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         ret_dict['demo'] = torch.stack(frames)
         ret_dict['demo_cp'] = torch.stack(cp_frames)
         return ret_dict
-    
+
     def _make_traj(self, traj, task_name, indx):
         # get the first frame from the trajectory
         ret_dict = {}
@@ -394,11 +415,26 @@ class MultiTaskPairedTargetObjDataset(Dataset):
             for j, t in enumerate(chosen_t):
                 t = t.item()
                 step_t = traj.get(t)
-                image = copy.copy(step_t['obs']['image'][:,:,::-1]/255)
+                image = copy.copy(step_t['obs']['image'][:, :, ::-1]/255)
                 processed = self.frame_aug(task_name, image)
-                images.append( processed )
+                images.append(processed)
                 if self.aug_twice:
-                    images_cp.append( self.frame_aug(task_name, image, True) )
+                    images_cp.append(self.frame_aug(task_name, image, True))
+        else:
+            end = len(traj)
+            start = torch.randint(low=1, high=max(
+                1, end - self._obs_T + 1), size=(1,))
+            chosen_t = [j + start for j in range(self._obs_T)]
+            images = []
+            images_cp = []
+            for j, t in enumerate(chosen_t):
+                t = t.item()
+                step_t = traj.get(t)
+                image = copy.copy(step_t['obs']['image'][:, :, ::-1]/255)
+                processed = self.frame_aug(task_name, image)
+                images.append(processed)
+                if self.aug_twice:
+                    images_cp.append(self.frame_aug(task_name, image, True))
 
         ret_dict['images'] = torch.stack(images)
         if self.aug_twice:
@@ -406,7 +442,8 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         # get target object position
         one_hot_encoding = np.zeros(4)
         one_hot_encoding[self.index_to_slot[indx]] = 1
-        one_hot_encoding = torch.from_numpy(one_hot_encoding).repeat(self._obs_T, 1)
+        one_hot_encoding = torch.from_numpy(
+            one_hot_encoding).repeat(self._obs_T, 1)
         ret_dict['target_position_one_hot'] = one_hot_encoding
         return ret_dict
 
@@ -415,6 +452,7 @@ class DIYBatchSampler(Sampler):
     """
     Customize any possible combination of both task families and sub-tasks in a batch of data.
     """
+
     def __init__(
         self,
         task_to_idx,
@@ -423,7 +461,7 @@ class DIYBatchSampler(Sampler):
         sampler_spec=dict(),
         tasks_spec=dict(),
         n_step=0,
-        ):
+    ):
         """
         Args:
         - batch_size:
@@ -456,7 +494,7 @@ class DIYBatchSampler(Sampler):
             if true, we lose control over how each batch is distributed to gpus
         """
         batch_size = sampler_spec.get('batch_size', 30)
-        drop_last  = sampler_spec.get('drop_last', False)
+        drop_last = sampler_spec.get('drop_last', False)
         if not isinstance(batch_size, int) or isinstance(batch_size, bool) or \
                 batch_size <= 0:
             raise ValueError("batch_size should be a positive integer value, "
@@ -485,7 +523,7 @@ class DIYBatchSampler(Sampler):
             task_name = spec.name
             idxs = task_to_idx.get(task_name)
             self.task_samplers[task_name] = OrderedDict(
-                {'all_sub_tasks': SubsetRandomSampler(idxs)}) # uniformly draw from union of all sub-tasks
+                {'all_sub_tasks': SubsetRandomSampler(idxs)})  # uniformly draw from union of all sub-tasks
             self.task_iterators[task_name] = OrderedDict(
                 {'all_sub_tasks': iter(SubsetRandomSampler(idxs))})
             assert task_name in subtask_to_idx.keys(), \
@@ -494,30 +532,36 @@ class DIYBatchSampler(Sampler):
             first_id = list(subtask_to_idx[task_name].keys())[0]
 
             sub_task_size = len(subtask_to_idx[task_name].get(first_id))
-            print("Task {} loaded {} subtasks, starting from {}, should all have sizes {}".format(\
+            print("Task {} loaded {} subtasks, starting from {}, should all have sizes {}".format(
                 task_name, num_loaded_sub_tasks, first_id, sub_task_size))
             for sub_task, sub_idxs in subtask_to_idx[task_name].items():
 
-                # the balancing has been requested 
+                # the balancing has been requested
                 if self.balancing_policy == 1 and self.object_distribution_to_indx != None:
-                    self.task_samplers[task_name][sub_task] = [SubsetRandomSampler(sample_list) for sample_list in object_distribution_to_indx[task_name][sub_task]]
-                    self.task_iterators[task_name][sub_task] = [iter(SubsetRandomSampler(sample_list)) for sample_list in object_distribution_to_indx[task_name][sub_task]]
+                    self.task_samplers[task_name][sub_task] = [SubsetRandomSampler(
+                        sample_list) for sample_list in object_distribution_to_indx[task_name][sub_task]]
+                    self.task_iterators[task_name][sub_task] = [iter(SubsetRandomSampler(
+                        sample_list)) for sample_list in object_distribution_to_indx[task_name][sub_task]]
                     for i, sample_list in enumerate(object_distribution_to_indx[task_name][sub_task]):
                         if len(sample_list) == 0:
-                            print(f"Task {task_name} - Sub-task {sub_task} - Position {i}")
+                            print(
+                                f"Task {task_name} - Sub-task {sub_task} - Position {i}")
 
                 else:
-                    self.task_samplers[task_name][sub_task] = SubsetRandomSampler(sub_idxs)
+                    self.task_samplers[task_name][sub_task] = SubsetRandomSampler(
+                        sub_idxs)
                     assert len(sub_idxs) == sub_task_size, \
-                        'Got uneven data sizes for sub-{} under the task {}!'.format(sub_task, task_name)
-                    self.task_iterators[task_name][sub_task] = iter(SubsetRandomSampler(sub_idxs))
+                        'Got uneven data sizes for sub-{} under the task {}!'.format(
+                            sub_task, task_name)
+                    self.task_iterators[task_name][sub_task] = iter(
+                        SubsetRandomSampler(sub_idxs))
                     # print('subtask indexs:', sub_task, max(sub_idxs))
             curr_task_info = {
                 'size':         len(idxs),
                 'n_tasks':      len(subtask_to_idx[task_name].keys()),
                 'sub_id_to_name': {i: name for i, name in enumerate(subtask_to_idx[task_name].keys())},
                 'traj_per_subtask': sub_task_size,
-                'sampler_len':   -1 # to be decided below
+                'sampler_len': -1  # to be decided below
             }
             self.task_info[task_name] = curr_task_info
 
@@ -530,7 +574,8 @@ class DIYBatchSampler(Sampler):
             name = spec.name
             _ids = spec.get('task_ids', None)
             n = spec.get('n_per_task', None)
-            assert (_ids and n), 'Must specify which subtask ids to use and how many is contained in each batch'
+            assert (
+                _ids and n), 'Must specify which subtask ids to use and how many is contained in each batch'
             info = self.task_info[name]
             subtask_names = info.get('sub_id_to_name')
             for _id in _ids:
@@ -539,15 +584,17 @@ class DIYBatchSampler(Sampler):
                     self.idx_map[idx] = (name, subtask)
                     idx += 1
                 sub_length = int(info['traj_per_subtask'] / n)
-                self.task_info[name]['sampler_len'] = max(sub_length, self.task_info[name]['sampler_len'])
-        #print("Index map:", self.idx_map)
+                self.task_info[name]['sampler_len'] = max(
+                    sub_length, self.task_info[name]['sampler_len'])
+        # print("Index map:", self.idx_map)
 
-        self.max_len = max([info['sampler_len'] for info in self.task_info.values()])
+        self.max_len = max([info['sampler_len']
+                           for info in self.task_info.values()])
         print('Max length for sampler iterator:', self.max_len)
         self.n_tasks = n_tasks
 
         assert idx == batch_size, "The constructed batch size {} doesn't match desired {}".format(
-            idx , batch_size)
+            idx, batch_size)
         self.batch_size = idx
         self.drop_last = drop_last
 
@@ -568,8 +615,9 @@ class DIYBatchSampler(Sampler):
                     iterator = self.task_iterators[name][sub_task][slot_indx]
                     try:
                         batch.append(next(iterator))
-                    except StopIteration:   #print('early sstop:', i, name)
-                        iterator = iter(sampler) # re-start the smaller-sized tasks
+                    except StopIteration:  # print('early sstop:', i, name)
+                        # re-start the smaller-sized tasks
+                        iterator = iter(sampler)
                         batch.append(next(iterator))
                         self.task_iterators[name][sub_task][slot_indx] = iterator
                 else:
@@ -578,8 +626,9 @@ class DIYBatchSampler(Sampler):
                     iterator = self.task_iterators[name][sub_task]
                     try:
                         batch.append(next(iterator))
-                    except StopIteration:   #print('early sstop:', i, name)
-                        iterator = iter(sampler) # re-start the smaller-sized tasks
+                    except StopIteration:  # print('early sstop:', i, name)
+                        # re-start the smaller-sized tasks
+                        iterator = iter(sampler)
                         batch.append(next(iterator))
                         self.task_iterators[name][sub_task] = iterator
 
@@ -598,4 +647,3 @@ class DIYBatchSampler(Sampler):
         # define total length of sampler as number of iterations to
         # exhaust the last task
         return self.max_len
-

@@ -40,7 +40,7 @@ class Trainer:
         self._best_validation_weights = None
 
         append = "-Batch{}".format(int(self.config.bsize))
-        if 'mosaic' in hydra_cfg.policy._target_:
+        if 'mosaic' in hydra_cfg.policy:
             append = "-Batch{}-{}gpu-Attn{}ly{}-Act{}ly{}mix{}".format(
                 int(self.config.bsize), int(torch.cuda.device_count()),
                 int(self.config.policy.attn_cfg.n_attn_layers), int(
@@ -55,7 +55,7 @@ class Trainer:
                 append += "-actCat"
             else:
                 append += "-noCat"
-            if 'mosaic' in hydra_cfg.policy._target_:
+            if 'mosaic' in hydra_cfg.policy:
                 append += "-simclr{}x{}".format(int(self.config.policy.simclr_config.compressor_dim), int(
                     self.config.policy.simclr_config.hidden_dim))
 

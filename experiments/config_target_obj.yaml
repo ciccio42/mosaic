@@ -1,6 +1,6 @@
 debug: False
-EXPERT_DATA:    '/mnt/sdc1/frosa/multitask_dataset/multitask_dataset_baseline' 
-save_path:      /user/frosa/robotic/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+EXPERT_DATA:    None
+save_path:      None
 wandb_log: True 
 project_name: mosaic_baseline_balanced_batch_no_strong_aug_no_crop_twice_scaled_rgb_lr_schedule_state_stack
 log_freq:       1
@@ -65,7 +65,7 @@ defaults:
   - tasks_cfgs:  7_tasks
 
 # dataset/loader/samplers
-loader_workers: 10
+loader_workers: 20
 samplers:        
   batch_size:         ${bsize}
   drop_last:          False
@@ -85,7 +85,7 @@ dataset_cfg:
   width:            180
   split:            [0.9, 0.1]
   demo_T:           4
-  obs_T:            1
+  obs_T:            10
   data_augs:        ${augs}
   non_sequential:   False
   crop_twice:       False
@@ -108,38 +108,11 @@ augs:
   use_affine:        False  
   rand_trans:        0.1
 
-
-simclr:
-  demo_T:           ${train_cfg.dataset.demo_T}
-  obs_T:            ${train_cfg.dataset.obs_T} 
-  mul_pre:          0
-  mul_pos:          0
-  mul_intm:         0
-  tau:              0.005      
-  compressor_dim:   128
-  temporal:         True
-  hidden_dim:       512 #256
-  fix_step:         -1 
-byol: 
-  p:                2
-  project_dim:      128
-  hidden_dim:       256
-  demo_T:           ${train_cfg.dataset.demo_T}
-  obs_T:            ${train_cfg.dataset.obs_T}   
-  demo_proj:        True
-  share_mlp:        True 
-  no_hidden:        False
-  draw_apart:       False
-  mul_pre:          0
-  mul_pos:          0
-  mul_intm:         0 
-  mul_demo:         0
-
 # model related
 policy: ???  # set to any set of configs via command line, e.g. policy='${tosil}'
 
-mosaic:
-  _target_:           mosaic.models.target_obj_classification.TargetObjClassificator
+target_obj_detector:
+  _target_:           mosaic.models.target_obj_detector.TargetObjDetector
   latent_dim:         40
   sdim:               8
   concat_state:       True
@@ -150,14 +123,12 @@ mosaic:
   dim_H:              7
   dim_W:              12  
   demo_mean:          True 
-  action_cfg:         ${target_obj_classificator}
+  mlp_cfg:         ${mlp_cfg}
   concat_demo_head:   False
   concat_demo_act:    True 
   attn_cfg:           ${attn}
-  byol_config:        ${byol}
-  simclr_config:      ${simclr}
 
-target_obj_classificator:
+mlp_cfg:
   n_layers:         2    
   out_dim:          256 #64
   hidden_dim:       128
