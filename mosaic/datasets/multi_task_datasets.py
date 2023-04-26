@@ -23,7 +23,7 @@ from operator import concat
 ENV_OBJECTS = {
     'pick_place': {
         'obj_names': ['milk', 'bread', 'cereal', 'can'],
-        'ranges':  [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+        'ranges': [[0.195, 0.255], [0.045, 0.105], [-0.105, -0.045], [-0.255, -0.195]]
     },
     'nut_assembly': {
         'obj_names': ['nut0', 'nut1', 'nut2'],

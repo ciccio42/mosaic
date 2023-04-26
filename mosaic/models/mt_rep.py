@@ -425,9 +425,12 @@ class VideoImitation(nn.Module):
             concat_demo_act, concat_demo_head))
 
         # NOTE(Mandi): reduced input dimension size  from previous version! hence maybe try widen/add more action layers
-        target_obj_embedding_dim = self._target_obj_embedding._modules['2'].out_features
-        ac_in_dim = int(latent_dim + float(concat_target_obj_embedding) * target_obj_embedding_dim +
-                        float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
+        if concat_target_obj_embedding:
+            target_obj_embedding_dim = self._target_obj_embedding._modules['2'].out_features
+            ac_in_dim = int(latent_dim + float(concat_target_obj_embedding) * target_obj_embedding_dim +
+                            float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
+        else:
+            ac_in_dim = int(latent_dim + float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
 
         inv_input_dim = int(2*ac_in_dim)
 
