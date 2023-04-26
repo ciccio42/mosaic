@@ -588,7 +588,7 @@ class VideoImitation(nn.Module):
             assert images_cp is not None, 'Must pass in augmented version of images'
         embed_out = self._embed(images, context)
 
-        if self._target_object_backbone is not None and not self._freeze_target_obj_detector:
+        if self._target_object_backbone is not None and not self._freeze_target_obj_detector and    target_obj_embedding is None:
             # compute the embedding for the first frame
             first_frame_batch = images[:, 0, :, :, :]
             first_frame_batch = first_frame_batch[:, None, :, :, :]

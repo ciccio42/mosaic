@@ -190,12 +190,6 @@ if __name__ == '__main__':
             start = task_indx*args.per_task_group
             end = args.per_task_group + (task_indx*args.per_task_group)
             seeds_for_sub_task[args.task_name][task_indx] = seeds[start:end]
-        # save seed file
-        import json
-        seeds_file_path = os.path.join(
-            args.save_dir, f"{args.robot}_seeds.txt")
-        with open(seeds_file_path, 'w') as f:
-            f.write(json.dumps(seeds_for_sub_task))
     else:
         n_per_group = args.per_task_group
         seeds = [263237945 + int(n // (args.n_tasks * n_per_group))
@@ -239,6 +233,13 @@ if __name__ == '__main__':
             'task_group_size': args.per_task_group,
         },
         open(join(args.save_dir, 'info.json'), 'w'))
+
+    # save seed file
+    import json
+    seeds_file_path = os.path.join(
+        args.save_dir, f"{args.robot}_seeds.txt")
+    with open(seeds_file_path, 'w') as f:
+        f.write(json.dumps(seeds_for_sub_task))
 
     count = torch.cuda.device_count()
     print("Distributing work to %s GPUs" % count)

@@ -394,7 +394,8 @@ class MilkObject(MujocoXMLObject):
     """
 
     def __init__(self, name='milk'):
-        super().__init__(os.path.join(BASE_DIR, 'milk_3.xml'),
+        # milk_3 or milk
+        super().__init__(os.path.join(BASE_DIR, 'milk.xml'),
                          name=name, joints=[
                              dict(type="free", damping="0.0005")],
                          obj_type="all", duplicate_collision_geoms=True)
@@ -406,7 +407,8 @@ class CokeCan(MujocoXMLObject):
     """
 
     def __init__(self, name='can'):
-        super().__init__(os.path.join(BASE_DIR, 'coke_1.xml'),
+        # coke_1 or coke
+        super().__init__(os.path.join(BASE_DIR, 'coke.xml'),
                          name=name, joints=[
                              dict(type="free", damping="0.0005")],
                          obj_type="all", duplicate_collision_geoms=True)
