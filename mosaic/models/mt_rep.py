@@ -508,7 +508,7 @@ class VideoImitation(nn.Module):
         else:
             obs_T = img_embed.shape[1]
 
-        if self._concat_target_obj_embedding:
+        if self._concat_target_obj_embedding and not eval:
             ac_in = img_embed[:, 1:, :]
             states = states[:, 1:, :]
         elif self._concat_target_obj_embedding and eval:

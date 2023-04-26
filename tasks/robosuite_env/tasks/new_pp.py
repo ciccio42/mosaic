@@ -126,7 +126,7 @@ class PickPlace(SingleArmEnv):
             camera_heights=256,
             camera_widths=256,
             camera_depths=False,
-            task_id = 0,
+            task_id=0,
             object_type=None,
     ):
         # settings for table top
@@ -141,7 +141,7 @@ class PickPlace(SingleArmEnv):
         self.obj_names = ["Milk", "Bread", "Cereal", "Can"]
         if object_type is not None:
             assert (
-                    object_type in self.object_to_id.keys()
+                object_type in self.object_to_id.keys()
             ), "invalid @object_type argument - choose one of {}".format(
                 list(self.object_to_id.keys())
             )
@@ -217,7 +217,8 @@ class PickPlace(SingleArmEnv):
         super()._load_model()
 
         # Adjust base pose accordingly
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        xpos = self.robots[0].robot_model.base_xpos_offset["table"](
+            self.table_full_size[0])
         self.robots[0].robot_model.set_base_xpos(xpos)
 
         # load model for table top workspace
@@ -237,7 +238,8 @@ class PickPlace(SingleArmEnv):
         self.objects = []
         self.visual_objects = []
         for vis_obj_cls, obj_name in zip(
-                (MilkVisualObject, BreadVisualObject, CerealVisualObject, CanVisualObject),
+                (MilkVisualObject, BreadVisualObject,
+                 CerealVisualObject, CanVisualObject),
                 self.obj_names,
         ):
             vis_name = "Visual" + obj_name
@@ -270,8 +272,10 @@ class PickPlace(SingleArmEnv):
         """
         Helper function for defining placement initializer and object sampling bounds.
         """
-        self.placement_initializer = SequentialCompositeSampler(name="ObjectSampler")
-        y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+        self.placement_initializer = SequentialCompositeSampler(
+            name="ObjectSampler")
+        y_ranges = [[0.255, 0.195], [0.105, 0.045],
+                    [-0.045, -0.105], [-0.195, -0.255]]
         arr = np.arange(4)
         np.random.shuffle(arr)
         for i in range(4):
@@ -328,7 +332,8 @@ class PickPlace(SingleArmEnv):
             # del di[in_hand_cam_name + '_image']
             if self.camera_depths[0]:
                 di['depth'] = di[cam_name + '_depth'].copy()
-                di['depth'] = ((di['depth'] - 0.95) / 0.05 * 255).astype(np.uint8)
+                di['depth'] = ((di['depth'] - 0.95) /
+                               0.05 * 255).astype(np.uint8)
 
         di['target-box-id'] = self.bin_id
         di['target-object'] = self.object_id
@@ -345,7 +350,8 @@ class PickPlace(SingleArmEnv):
 
         for i, obj in enumerate(self.objects):
             obj_str = obj.name
-            obj_pos = np.array(self.sim.data.body_xpos[self.obj_body_id[obj_str]])
+            obj_pos = np.array(
+                self.sim.data.body_xpos[self.obj_body_id[obj_str]])
             obj_quat = T.convert_quat(
                 self.sim.data.body_xquat[self.obj_body_id[obj_str]], to="xyzw"
             )
@@ -354,7 +360,8 @@ class PickPlace(SingleArmEnv):
 
             # get relative pose of object in gripper frame
             object_pose = T.pose2mat((obj_pos, obj_quat))
-            rel_pose = T.pose_in_A_to_pose_in_B(object_pose, world_pose_in_gripper)
+            rel_pose = T.pose_in_A_to_pose_in_B(
+                object_pose, world_pose_in_gripper)
             rel_pos, rel_quat = T.mat2pose(rel_pose)
             di["{}_to_{}eef_pos".format(obj_str, pr)] = rel_pos
             di["{}_to_{}eef_quat".format(obj_str, pr)] = rel_quat
@@ -368,7 +375,6 @@ class PickPlace(SingleArmEnv):
 
         return di
 
-
     def _get_reference(self):
         """
         Sets up references to important components. A reference is typically an
@@ -381,8 +387,10 @@ class PickPlace(SingleArmEnv):
 
         # object-specific ids
         for obj in (self.visual_objects + self.objects):
-            self.obj_body_id[obj.name] = self.sim.model.body_name2id(obj.root_body)
-            self.obj_geom_id[obj.name] = [self.sim.model.geom_name2id(g) for g in obj.contact_geoms]
+            self.obj_body_id[obj.name] = self.sim.model.body_name2id(
+                obj.root_body)
+            self.obj_geom_id[obj.name] = [
+                self.sim.model.geom_name2id(g) for g in obj.contact_geoms]
 
         # keep track of which objects are in their corresponding bins
         self.objects_in_bins = np.zeros(len(self.objects))
@@ -398,7 +406,7 @@ class PickPlace(SingleArmEnv):
 
         bin_x_high = bin_x_low + self.bin_size[0]
         bin_y_high = bin_y_low + self.bin_size[1]
-        #print(self.bin_pos, obj_pos)
+        # print(self.bin_pos, obj_pos)
         res = True
         if (
                 bin_x_low < obj_pos[0] < bin_x_high
@@ -407,7 +415,6 @@ class PickPlace(SingleArmEnv):
         ):
             res = False
         return res
-
 
     def _reset_internal(self):
         """
@@ -422,10 +429,8 @@ class PickPlace(SingleArmEnv):
 
             # Loop through all objects and reset their positions
             for obj_pos, obj_quat, obj in object_placements.values():
-                self.sim.data.set_joint_qpos(obj.joints[-1], np.concatenate([np.array(obj_pos), np.array(obj_quat)]))
-
-
-
+                self.sim.data.set_joint_qpos(
+                    obj.joints[-1], np.concatenate([np.array(obj_pos), np.array(obj_quat)]))
 
     def _check_success(self):
         obj_str = self.objects[self.object_id].name
@@ -445,7 +450,8 @@ class PickPlace(SingleArmEnv):
 
         # Color the gripper visualization site according to its distance to the cube
         if vis_settings["grippers"]:
-            self._visualize_gripper_to_target(gripper=self.robots[0].gripper, target=self.drawers[self.drawer_id])
+            self._visualize_gripper_to_target(
+                gripper=self.robots[0].gripper, target=self.drawers[self.drawer_id])
 
 
 class PandaPickPlace(PickPlace):
@@ -459,6 +465,7 @@ class PandaPickPlace(PickPlace):
             task_id = np.random.randint(0, 8)
         super().__init__(robots=['Panda'], task_id=task_id, **kwargs)
 
+
 class SawyerPickPlace(PickPlace):
     """
     Easier version of task - place one object into its bin.
@@ -470,16 +477,16 @@ class SawyerPickPlace(PickPlace):
             task_id = np.random.randint(0, 8)
         super().__init__(robots=['Sawyer'], task_id=task_id, **kwargs)
 
+
 if __name__ == '__main__':
     from robosuite.environments.manipulation.pick_place import PickPlace
     import robosuite
     from robosuite.controllers import load_controller_config
 
-
     controller = load_controller_config(default_controller="IK_POSE")
     env = PandaPickPlace(task_id=0, has_renderer=True, controller_configs=controller,
-                            has_offscreen_renderer=False,
-                            reward_shaping=False, use_camera_obs=False, camera_heights=320, camera_widths=320, render_camera='frontview')
+                         has_offscreen_renderer=False,
+                         reward_shaping=False, use_camera_obs=False, camera_heights=320, camera_widths=320, render_camera='frontview')
     env.reset()
     for i in range(1000):
         if i % 200 == 0:
