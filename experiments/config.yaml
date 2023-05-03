@@ -18,7 +18,7 @@ task_names: None
 # imitation loss multipliers
 inv_mul:        1
 bc_mul:         1
-pnt_mul:        1
+pnt_mul:        0.1
 rep_muls:
   img_byol:           ${byol.mul_pre}
   attn_byol:          ${byol.mul_pos}

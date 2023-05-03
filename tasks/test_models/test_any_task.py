@@ -373,7 +373,7 @@ if __name__ == '__main__':
     assert args.N, "Need pre-define how many trajs to test for each env"
     print('Found {} GPU devices, using {} parallel workers for evaluating {} total trajectories\n'.format(torch.cuda.device_count(), args.num_workers, args.N))
 
-    T_context = config.policy.demo_T # a different set of config scheme
+    T_context = config.dataset_cfg.demo_T # a different set of config scheme
     #heights, widths = config.train_cfg.dataset.get('height', 100), config.train_cfg.dataset.get('width', 200)
     heights, widths = build_task.get('render_hw', (100, 180))
     if args.use_h != -1 and args.use_w != -1:

@@ -313,7 +313,7 @@ def calculate_task_loss(config, train_cfg, device, model, task_inputs):
 
         if 'point_ll' in out:
             pnts = model_inputs['points']
-            point_ll = -out['point_ll'][range(pnts.shape[0]),
+            point_ll = - train_cfg.pnt_loss_mult * out['point_ll'][range(pnts.shape[0]),
                                         pnts[:, -1, 0], pnts[:, -1, 1]]
             # l_point = train_cfg.pnt_loss_mult * \
             #     torch.mean(-out['point_ll'][range(pnts.shape[0]),

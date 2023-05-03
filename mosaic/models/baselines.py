@@ -202,7 +202,7 @@ class InverseImitation(nn.Module):
         params = sum([np.prod(p.size()) for p in model_parameters])
         print('Total params in Imitation module:', params)
 
-    def forward(self, states, images, context, ret_dist=True, eval=False):
+    def forward(self, states, images, context, ret_dist=True, target_obj_embedding=None, eval=False):
         img_embed = self._embed(images, context, False)
         pred_latent, goal_embed = self._pred_goal(images[:, :1], context)
         states = torch.cat((img_embed, states),

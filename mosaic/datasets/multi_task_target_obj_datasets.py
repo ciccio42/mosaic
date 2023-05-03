@@ -408,7 +408,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         images_cp = []
         target_obj_pos_one_hot = []
 
-        if self.non_sequential:
+        if self.non_sequential and self._obs_T > 1:
             end = len(traj)
             chosen_t = torch.randperm(end)
             chosen_t = chosen_t[chosen_t != 0][:self._obs_T]
@@ -420,7 +420,7 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                 images.append(processed)
                 if self.aug_twice:
                     images_cp.append(self.frame_aug(task_name, image, True))
-        else:
+        elif not self.non_sequential and self._obs_T > 1:
             end = len(traj)
             start = torch.randint(low=1, high=max(
                 1, end - self._obs_T + 1), size=(1,))
@@ -435,10 +435,15 @@ class MultiTaskPairedTargetObjDataset(Dataset):
                 images.append(processed)
                 if self.aug_twice:
                     images_cp.append(self.frame_aug(task_name, image, True))
+        else:
+            image =  copy.copy(traj.get(1)['obs']['image'][:,:,::-1]/255)
+            images.append(self.frame_aug(task_name, image))
+            images_cp.append( self.frame_aug(task_name, image, True) )
 
         ret_dict['images'] = torch.stack(images)
         if self.aug_twice:
             ret_dict['images_cp'] = torch.stack(images_cp)
+
         # get target object position
         one_hot_encoding = np.zeros(4)
         one_hot_encoding[self.index_to_slot[indx]] = 1

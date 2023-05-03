@@ -369,7 +369,7 @@ class VideoImitation(nn.Module):
                 model_path=target_obj_detector_path, step=target_obj_detector_step, conf_file=conf_file, freeze=freeze_target_obj_detector, remove_class_layers=remove_class_layers)
 
         self._target_object_backbone = None
-        if not freeze_target_obj_detector:
+        if not freeze_target_obj_detector and load_target_obj_detector:
             self._target_object_backbone = copy.deepcopy(self._embed)
             for param in self._target_object_backbone.parameters():
                 param.requires_grad = False
@@ -430,7 +430,8 @@ class VideoImitation(nn.Module):
             ac_in_dim = int(latent_dim + float(concat_target_obj_embedding) * target_obj_embedding_dim +
                             float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
         else:
-            ac_in_dim = int(latent_dim + float(concat_demo_act) * latent_dim + float(concat_state) * sdim)
+            ac_in_dim = int(latent_dim + float(concat_demo_act)
+                            * latent_dim + float(concat_state) * sdim)
 
         inv_input_dim = int(2*ac_in_dim)
 
@@ -591,7 +592,7 @@ class VideoImitation(nn.Module):
             assert images_cp is not None, 'Must pass in augmented version of images'
         embed_out = self._embed(images, context)
 
-        if self._target_object_backbone is not None and not self._freeze_target_obj_detector and    target_obj_embedding is None:
+        if self._target_object_backbone is not None and not self._freeze_target_obj_detector and target_obj_embedding is None:
             # compute the embedding for the first frame
             first_frame_batch = images[:, 0, :, :, :]
             first_frame_batch = first_frame_batch[:, None, :, :, :]

@@ -17,6 +17,7 @@ from robosuite_env.tasks import bluewood, greenwood, redwood, grayplaster, lemon
 
 NAMES = {'r': 'red block', 'g': 'green block', 'b': 'blue block'}
 
+
 class Stack(DefaultStack):
     def __init__(self, task_id, robots, size=False, shape=False, color=False, **kwargs):
         self.task_id = task_id
@@ -31,7 +32,8 @@ class Stack(DefaultStack):
         """
         SingleArmEnv._load_model(self)
 
-        xpos = self.robots[0].robot_model.base_xpos_offset["table"](self.table_full_size[0])
+        xpos = self.robots[0].robot_model.base_xpos_offset["table"](
+            self.table_full_size[0])
         self.robots[0].robot_model.set_base_xpos(xpos)
 
         # load model for table top workspace
@@ -54,27 +56,34 @@ class Stack(DefaultStack):
                 size_noise = np.random.uniform(-0.004, 0.004)
         if self.random_color:
             material_dict = {'g': grayplaster, 'r': lemon, 'b': darkwood}
-            color_dict = {'g': [0, 0, 0, 1], 'r': [0, 0, 0, 1], 'b': [0, 0, 0, 1]}
+            color_dict = {'g': [0, 0, 0, 1], 'r': [
+                0, 0, 0, 1], 'b': [0, 0, 0, 1]}
 
         if not self.random_shape:
             self.cubeA = BoxObject(
                 name="cubeA",
-                size_min=[0.024 + size_noise, 0.024 + size_noise, 0.024 + size_noise],
-                size_max=[0.024 + size_noise, 0.024 + size_noise, 0.024 + size_noise],
+                size_min=[0.024 + size_noise, 0.024 +
+                          size_noise, 0.024 + size_noise],
+                size_max=[0.024 + size_noise, 0.024 +
+                          size_noise, 0.024 + size_noise],
                 rgba=color_dict[task[0]],
                 material=material_dict[task[0]],
             )
             self.cubeB = BoxObject(
                 name="cubeB",
-                size_min=[0.028 + size_noise, 0.028 + size_noise, 0.028 + size_noise],
-                size_max=[0.028 + size_noise, 0.028 + size_noise, 0.028 + size_noise],
+                size_min=[0.028 + size_noise, 0.028 +
+                          size_noise, 0.028 + size_noise],
+                size_max=[0.028 + size_noise, 0.028 +
+                          size_noise, 0.028 + size_noise],
                 rgba=color_dict[task[1]],
                 material=material_dict[task[1]],
             )
             self.cubeC = BoxObject(
                 name="cubeC",
-                size_min=[0.024 + size_noise, 0.024 + size_noise, 0.024 + size_noise],
-                size_max=[0.024 + size_noise, 0.024 + size_noise, 0.024 + size_noise],
+                size_min=[0.024 + size_noise, 0.024 +
+                          size_noise, 0.024 + size_noise],
+                size_max=[0.024 + size_noise, 0.024 +
+                          size_noise, 0.024 + size_noise],
                 rgba=color_dict[task[2]],
                 material=material_dict[task[2]],
             )
@@ -105,7 +114,8 @@ class Stack(DefaultStack):
             )
 
         self.cubes = [self.cubeA, self.cubeC, self.cubeB]
-        self.cube_names = {'cubeA': NAMES[task[0]], 'cubeB': NAMES[task[1]], 'cubeC':  NAMES[task[2]]}
+        self.cube_names = {
+            'cubeA': NAMES[task[0]], 'cubeB': NAMES[task[1]], 'cubeC':  NAMES[task[2]]}
         # Create placement initializer
         self._get_placement_initializer()
 
@@ -120,7 +130,8 @@ class Stack(DefaultStack):
         """
         Helper function for defining placement initializer and object sampling bounds.
         """
-        self.placement_initializer = SequentialCompositeSampler(name="ObjectSampler")
+        self.placement_initializer = SequentialCompositeSampler(
+            name="ObjectSampler")
 
         # each object should just be sampled in the bounds of the bin (with some tolerance)
         self.placement_initializer.append_sampler(
@@ -171,14 +182,15 @@ class Stack(DefaultStack):
         di = super()._get_observation()
         if self.use_camera_obs:
             cam_name = self.camera_names[0]
-            #in_hand_cam_name = self.camera_names[1]
+            # in_hand_cam_name = self.camera_names[1]
             di['image'] = di[cam_name + '_image'].copy()
-            #di['hand_image'] = di[in_hand_cam_name + '_image'].copy()
+            # di['hand_image'] = di[in_hand_cam_name + '_image'].copy()
             del di[cam_name + '_image']
-            #del di[in_hand_cam_name + '_image']
+            # del di[in_hand_cam_name + '_image']
             if self.camera_depths[0]:
                 di['depth'] = di[cam_name + '_depth'].copy()
-                di['depth'] = ((di['depth'] - 0.95) / 0.05 * 255).astype(np.uint8)
+                di['depth'] = ((di['depth'] - 0.95) /
+                               0.05 * 255).astype(np.uint8)
 
         return di
 
@@ -197,6 +209,7 @@ class SawyerBlockStacking(Stack):
         obj = np.random.randint(6) if force_object is None else force_object
         super().__init__(task_id=obj, robots=['Sawyer'], **kwargs)
 
+
 class PandaBlockStacking(Stack):
     """
     Easier version of task - place one object into its bin.
@@ -208,17 +221,15 @@ class PandaBlockStacking(Stack):
         super().__init__(task_id=obj, robots=['Panda'], **kwargs)
 
 
-
 if __name__ == '__main__':
     from robosuite.environments.manipulation.pick_place import PickPlace
     import robosuite
     from robosuite.controllers import load_controller_config
 
-
     controller = load_controller_config(default_controller="IK_POSE")
     env = SawyerBlockStacking(has_renderer=True, controller_configs=controller,
-                  has_offscreen_renderer=False, reward_shaping=False, use_camera_obs=False, camera_heights=320,
-                  camera_widths=320)
+                              has_offscreen_renderer=False, reward_shaping=False, use_camera_obs=False, camera_heights=320,
+                              camera_widths=320)
     for i in range(1000):
         if i % 200 == 0:
             env.reset()

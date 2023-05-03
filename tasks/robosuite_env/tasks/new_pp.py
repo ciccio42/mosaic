@@ -274,8 +274,9 @@ class PickPlace(SingleArmEnv):
         """
         self.placement_initializer = SequentialCompositeSampler(
             name="ObjectSampler")
-        y_ranges = [[0.255, 0.195], [0.105, 0.045],
-                    [-0.045, -0.105], [-0.195, -0.255]]
+        # y_ranges = [[0.255, 0.195], [0.105, 0.045],
+        #             [-0.045, -0.105], [-0.195, -0.255]]
+        y_ranges = [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
         arr = np.arange(4)
         np.random.shuffle(arr)
         for i in range(4):
