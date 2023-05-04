@@ -443,7 +443,6 @@ class MultiTaskPairedTargetObjDataset(Dataset):
         ret_dict['images'] = torch.stack(images)
         if self.aug_twice:
             ret_dict['images_cp'] = torch.stack(images_cp)
-
         # get target object position
         one_hot_encoding = np.zeros(4)
         one_hot_encoding[self.index_to_slot[indx]] = 1

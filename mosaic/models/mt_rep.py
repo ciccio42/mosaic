@@ -356,7 +356,6 @@ class VideoImitation(nn.Module):
         simclr_config=dict(),
     ):
         super().__init__()
-
         self._remove_class_layers = remove_class_layers
         if not load_target_obj_detector:
             self._embed = _TransformerFeatures(

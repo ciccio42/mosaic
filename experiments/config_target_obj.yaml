@@ -2,7 +2,7 @@ debug: False
 EXPERT_DATA:    None
 save_path:      None
 wandb_log: True 
-project_name: mosaic_baseline_balanced_batch_no_strong_aug_no_crop_twice_scaled_rgb_lr_schedule_state_stack
+project_name: None
 log_freq:       1
 save_optim:     True
 resume:         False
@@ -87,7 +87,7 @@ dataset_cfg:
   demo_T:           4
   obs_T:            10
   data_augs:        ${augs}
-  non_sequential:   False
+  non_sequential:   True
   crop_twice:       False
   allow_val_skip:   ${val_skip}
   allow_train_skip: ${train_skip}

@@ -231,11 +231,12 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
 
     return agent_env, context, variation, teacher_expert_rollout
 
-def rollout_imitation(model, config, ctr, 
+def rollout_imitation(model, target_obj_dec, config, ctr, 
     heights=100, widths=200, size=0, shape=0, color=0, max_T=60, env_name='place', gpu_id=-1, baseline=None, variation=None, seed=None):
     if gpu_id == -1:
         gpu_id = int(ctr % torch.cuda.device_count())
     model = model.cuda(gpu_id)
+    target_obj_dec = target_obj_dec.cuda(gpu_id)
 
     img_formatter = build_tvf_formatter(config, env_name)
      
@@ -253,11 +254,12 @@ def rollout_imitation(model, config, ctr,
     build_task = TASK_MAP.get(env_name, None)
     assert build_task, 'Got unsupported task '+env_name
     eval_fn = build_task['eval_fn']
-    traj, info = eval_fn(model, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
+    traj, info = eval_fn(model, target_obj_dec, env, context, gpu_id, variation_id, img_formatter, baseline=baseline)
     print("Evaluated traj #{}, task#{}, reached? {} picked? {} success? {} ".format(ctr, variation_id, info['reached'], info['picked'], info['success']))
+    print(f"Avg prediction {info['avg_pred']}")
     return traj, info, expert_traj, context
 
-def _proc(model, config, results_dir, heights, widths, size, shape, color, env_name, baseline, variation, seed, n):
+def _proc(model, target_obj_dec, config, results_dir, heights, widths, size, shape, color, env_name, baseline, variation, seed, n):
     json_name = results_dir + '/traj{}.json'.format(n)
     pkl_name  = results_dir + '/traj{}.pkl'.format(n)
     if os.path.exists(json_name) and os.path.exists(pkl_name):
@@ -267,12 +269,18 @@ def _proc(model, config, results_dir, heights, widths, size, shape, color, env_n
             json_name, n, task_success_flags['variation_id'], task_success_flags['reached'], task_success_flags['picked'], task_success_flags['success']))
     else:
         rollout, task_success_flags, expert_traj, context = rollout_imitation(
-            model, config, n, heights, widths, size, shape, color, 
+            model, target_obj_dec, config, n, heights, widths, size, shape, color, 
             max_T=60, env_name=env_name, baseline=baseline, variation=variation, seed=seed)
         pkl.dump(rollout, open(results_dir+'/traj{}.pkl'.format(n), 'wb'))
         pkl.dump(expert_traj, open(results_dir+'/demo{}.pkl'.format(n), 'wb'))
         pkl.dump(context, open(results_dir+'/context{}.pkl'.format(n), 'wb')) 
-        json.dump({k: int(v) for k, v in task_success_flags.items()}, open(results_dir+'/traj{}.json'.format(n), 'w'))
+        res_dict = dict()
+        for k, v in task_success_flags.items():
+            if v == True or v == False:
+                res_dict[k] = int(v)
+            else:
+                res_dict[k] = v
+        json.dump(res_dict, open(results_dir+'/traj{}.json'.format(n), 'w'))
     del model
     return task_success_flags
 
@@ -407,8 +415,19 @@ if __name__ == '__main__':
     variation = args.variation
     seed = args.seed
 
+    # load target object detector
+    model_path = config.policy.get('target_obj_detector_path', None)
+    target_obj_dec = None
+    if model_path is not None:
+        # load config file
+        conf_file = OmegaConf.load(os.path.join(model_path, "config.yaml"))
+        target_obj_dec = hydra.utils.instantiate(conf_file.policy)
+        weights = torch.load(os.path.join(model_path, f"model_save-{config.policy['target_obj_detector_step']}.pt"),map_location=torch.device('cpu'))
+        target_obj_dec.load_state_dict(weights)
+        target_obj_dec.eval()
+
     parallel = args.num_workers > 1
-    f = functools.partial(_proc, model, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline, variation, seed)
+    f = functools.partial(_proc, model, target_obj_dec, config, results_dir, heights, widths, size, shape, color, args.env, args.baseline, variation, seed)
 
     if parallel:
         with Pool(args.num_workers) as p:
@@ -429,11 +448,13 @@ if __name__ == '__main__':
         all_succ_flags = [t['success'] for t in task_success_flags]
         all_reached_flags = [t['reached'] for t in task_success_flags]
         all_picked_flags = [t['picked'] for t in task_success_flags]
-
+        all_avg_pred = [t['avg_pred'] for t in task_success_flags]
+        
         wandb.log({
             'avg_success': np.mean(all_succ_flags),
             'avg_reached': np.mean(all_reached_flags),
             'avg_picked': np.mean(all_picked_flags),
+            'avg_prediction': np.mean(all_avg_pred),
             'success_err': np.mean(all_succ_flags) / np.sqrt(args.N),
             })
 
