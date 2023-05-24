@@ -14,23 +14,26 @@ import numpy as np
 from mosaic.datasets import Trajectory
 import cv2
 # Frezzes at this line if torchvision is imported
-cv2.imshow("debug", np.zeros((128, 128, 3), dtype=np.uint8))
-cv2.waitKey(1)
-cv2.destroyAllWindows()
+# cv2.imshow("debug", np.zeros((128, 128, 3), dtype=np.uint8))
+# cv2.waitKey(1)
+# cv2.destroyAllWindows()
 
 ENV_OBJECTS = {
-    'pick_place':{
+    'pick_place': {
         'obj_names': ['milk', 'bread', 'cereal', 'can'],
         'ranges':  [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+        # 'ranges':  [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]]
+
     },
-    'nut_assembly':{
-        'obj_names': ['nut0', 'nut1', 'nut2'],        
+    'nut_assembly': {
+        'obj_names': ['nut0', 'nut1', 'nut2'],
         'ranges': [[0.10, 0.31], [-0.10, 0.10], [-0.31, -0.10]]
     }
 }
 
-def get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, max_T=80, baseline=None):
-    s_t = torch.from_numpy(np.concatenate(states, 0).astype(np.float32))[None] 
+
+def get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, max_T=80, baseline=None, action_ranges=[]):
+    s_t = torch.from_numpy(np.concatenate(states, 0).astype(np.float32))[None]
     if isinstance(images[-1], np.ndarray):
         i_t = torch.from_numpy(np.concatenate(
             images, 0).astype(np.float32))[None]
@@ -46,6 +49,7 @@ def get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, 
         action = out['action_dist'].sample()[-1].cpu().detach().numpy()
 
     else:
+        target_obj_embedding = None
         with torch.no_grad():
             out = model(states=s_t, images=i_t, context=context, eval=True,
                         target_obj_embedding=target_obj_embedding)  # to avoid computing ATC loss
@@ -57,12 +61,14 @@ def get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, 
             action = out['bc_distrib'].sample()[0, -1].cpu().numpy()
             if target_obj_dec is not None:
                 target_obj_position = target_obj_dec(i_t, context, eval=True)
-                predicted_prob = torch.nn.Softmax(dim=2)(target_obj_position['target_obj_pred']).to('cpu').tolist()
+                predicted_prob = torch.nn.Softmax(dim=2)(
+                    target_obj_position['target_obj_pred']).to('cpu').tolist()
             else:
                 predicted_prob = None
-    #action[3:7] = [1.0, 1.0, 0.0, 0.0]
+    # action[3:7] = [1.0, 1.0, 0.0, 0.0]
     action[-1] = 1 if action[-1] > 0 and n_steps < max_T - 1 else -1
     return action, predicted_prob
+
 
 def startup_env(model, env, context, gpu_id, variation_id, baseline=None):
     done, states, images = False, [], []
@@ -248,6 +254,7 @@ def press_button_eval(model, env, context, gpu_id, variation_id, img_formatter, 
 
     return traj, tasks
 
+
 def pick_place_eval(model, target_obj_dec, env, context, gpu_id, variation_id, img_formatter, max_T=85, baseline=False):
     done, states, images, context, obs, traj, tasks = \
         startup_env(model, env, context, gpu_id,
@@ -267,14 +274,14 @@ def pick_place_eval(model, target_obj_dec, env, context, gpu_id, variation_id, i
         for id, obj_name in enumerate(ENV_OBJECTS['pick_place']['obj_names']):
             if id == agent_target_obj_id:
                 # get object position
-                pos = traj.get(0)['obs'][f'{obj_name}_pos']        
+                pos = traj.get(0)['obs'][f'{obj_name}_pos']
                 for i, pos_range in enumerate(ENV_OBJECTS['pick_place']["ranges"]):
-                    if pos[1] >= pos_range[0] and pos[1] <= pos_range[1]: 
+                    if pos[1] >= pos_range[0] and pos[1] <= pos_range[1]:
                         agent_target_obj_position = i
-                break  
+                break
     # compute the average prediction over the whole trajectory
     avg_prediction = 0
-    
+
     while not done:
         tasks['reached'] = tasks['reached'] or np.linalg.norm(
             obs[obj_delta_key][:2]) < 0.03
@@ -285,16 +292,26 @@ def pick_place_eval(model, target_obj_dec, env, context, gpu_id, variation_id, i
         states.append(np.concatenate(
             (obs['ee_aa'], obs['gripper_qpos'])).astype(np.float32)[None])
         # convert observation from BGR to RGB and scale to 0-1
-        images.append(img_formatter(obs['image'][:,:,::-1]/255)[None])
-        action, target_pred = get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, max_T, baseline)
+        images.append(img_formatter(obs['image'][:, :, ::-1]/255)[None])
+        action, target_pred = get_action(
+            model,
+            target_obj_dec,
+            states,
+            images,
+            context,
+            gpu_id,
+            n_steps,
+            max_T,
+            baseline)
+
         obs, reward, env_done, info = env.step(action)
         if target_obj_dec is not None:
             info['target_pred'] = target_pred
             info['target_gt'] = agent_target_obj_position
             if np.argmax(target_pred) == agent_target_obj_position:
                 avg_prediction += 1
-            traj.append(obs, reward, done, info, action)
 
+        traj.append(obs, reward, done, info, action)
 
         tasks['success'] = reward or tasks['success']
         n_steps += 1

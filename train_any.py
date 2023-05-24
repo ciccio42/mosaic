@@ -120,6 +120,9 @@ class Trainer:
 
         vlm_alpha = self.train_cfg.get('vlm_alpha', 0.6)
         log_freq = self.train_cfg.get('log_freq', 1000)
+        val_freq = self.train_cfg.get('val_freq', 1000)
+        print_freq = self.train_cfg.get('print_freq', 10000)
+        save_freq = self.train_cfg.get('save_freq', 10000)
 
         print("Loss multipliers: \n BC: {} inv: {} Point: {}".format(
             self.train_cfg.bc_loss_mult, self.train_cfg.inv_loss_mult, self.train_cfg.pnt_loss_mult))
@@ -151,14 +154,33 @@ class Trainer:
                 tolog = {}
 
                 # Save stats
-                if (self._step % len(self._train_loader) == 0):  # stats
+                # if (self._step % len(self._train_loader) == 0):  # stats
+                #     stats_save_name = join(
+                #         self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
+                #     json.dump({k: str(v) for k, v in raw_stats.items()},
+                #               open(stats_save_name, 'w'))
+                if self._step % save_freq == 0:  # save model AND stats
+                    self.save_checkpoint(model, optimizer, weights_fn, save_fn)
+                    if save_fn is not None:
+                        save_fn(self._save_fname, self._step)
+                    else:
+                        save_module = model
+                        if weights_fn is not None:
+                            save_module = weights_fn()
+                        elif isinstance(model, nn.DataParallel):
+                            save_module = model.module
+                        torch.save(save_module.state_dict(),
+                                   self._save_fname + '-{}.pt'.format(self._step))
+                    if self.config.get('save_optim', False):
+                        torch.save(optimizer.state_dict(
+                        ), self._save_fname + '-optim-{}.pt'.format(self._step))
+
                     stats_save_name = join(
                         self.save_dir, 'stats', '{}.json'.format('train_val_stats'))
                     json.dump({k: str(v) for k, v in raw_stats.items()},
                               open(stats_save_name, 'w'))
 
                 optimizer.zero_grad()
-                # self.batch_distribution(inputs)
 
                 # calculate loss here:
                 task_losses = calculate_task_loss(
@@ -180,13 +202,13 @@ class Trainer:
                                 tolog[f'train/{loss_name}/{task_name}'] = loss_val
                                 tolog[f'train/{task_name}/{loss_name}'] = loss_val
 
-                    if (self._step % len(self._train_loader) == 0):
+                    if self._step % print_freq == 0:
                         print(
                             'Training epoch {1}/{2}, step {0}: \t '.format(self._step, e, epochs))
                         print(train_print)
 
                 #### ---- Validation step ----####
-                if (self._step % len(self._train_loader) == 0):
+                if self._step % val_freq == 0:
                     # exhaust all data in val loader and take avg loss
                     all_val_losses = {task: defaultdict(
                         list) for task in task_names}
@@ -220,14 +242,14 @@ class Trainer:
 
                     val_print = collect_stats(
                         self._step, avg_losses, raw_stats, prefix='val')
-                    if (self._step % len(self._train_loader) == 0):
+                    if self._step % print_freq == 0:
                         print('Validation step {}:'.format(self._step))
                         print(val_print)
 
                     # compute the sum of validation losses
                     weighted_task_loss_val = sum(
                         [l["loss_sum"] * task_loss_muls.get(name) for name, l in avg_losses.items()])
-                    if self.config.train_cfg.lr_schedule['type'] is not None:
+                    if self.config.train_cfg.lr_schedule != 'None':
                         # perform lr-scheduling step
                         scheduler.step(val_loss=weighted_task_loss_val)
                         if self.config.wandb_log:
@@ -304,18 +326,32 @@ class Trainer:
         assert self.device_list is not None, str(self.device_list)
         if optimizer == 'Adam':
             optimizer = torch.optim.Adam(
-                optim_weights, cfg.lr, weight_decay=cfg.get('weight_decay', 0))
+                optim_weights,
+                cfg.lr,
+                weight_decay=cfg.get('weight_decay', 0))
         elif optimizer == 'RMSProp':
             optimizer = torch.optim.RMSprop(
-                optim_weights, cfg.lr, weight_decay=cfg.get('weight_decay', 0))
-
+                optim_weights,
+                cfg.lr,
+                weight_decay=cfg.get('weight_decay', 0))
+        elif optimizer == 'AdamW':
+            optimizer = torch.optim.AdamW(
+                optim_weights,
+                cfg.lr,
+                weight_decay=cfg.weight_decay)
         if optimizer_state_dict:
             optimizer.load_state_dict(optimizer_state_dict)
 
         print(
             f"Creating {optimizer}, with lr {optimizer.param_groups[0]['lr']}")
 
-        return optimizer, build_scheduler(optimizer, cfg.get('lr_schedule', {}))
+        lr_schedule = dict()
+        if cfg.lr_schedule == 'None':
+            lr_schedule['type'] = None
+        else:
+            lr_schedule['type'] = cfg.lr_schedule
+        print(f"Lr-scheduler {cfg.lr_schedule}")
+        return optimizer, build_scheduler(optimizer, lr_schedule)
 
     def _loss_to_scalar(self, loss):
         """For more readable logging"""

@@ -1,20 +1,24 @@
 debug: False
-EXPERT_DATA:    '/home/ciccio/Desktop/multi_task_lfd/multitask_dataset/multitask_dataset_baseline' 
-save_path:      /home/ciccio/Desktop/multi_task_lfd/Multi-Task-LFD-Framework/mosaic-baseline-sav-folder/baseline-1
+EXPERT_DATA:   null
+save_path:     null
 wandb_log: True 
-project_name: None
+project_name: null
 log_freq:       1
+val_freq: 1
+print_freq: 1
+save_freq: 1
 save_optim:     True
 resume:         False
-resume_path:    None
+resume_path:    null
 resume_step:    -1
 device:         0
 exp_name:       -1
 epochs:         10
 bsize:          30
 vsize:          ${bsize} # optionally, set to a different batchsize for validation loader
-optimizer:      Adam #RMSProp
-task_names: None
+optimizer:      Adam # RMSProp
+task_names: null
+
 # imitation loss multipliers
 inv_mul:        1
 bc_mul:         1
@@ -45,7 +49,8 @@ train_cfg:
   sampler:              ${samplers}
   target_update_freq:   5  # used for soft parameter update
   early_stopping: ${early_stopping_cfg}
-  lr_schedule: {'type': ReduceLROnPlateau} #ExponentialDecay
+  weight_decay:  0.05
+  lr_schedule: 'ReduceLROnPlateau' # ExponentialDecay
 
 # early stopping configurator
 early_stopping_cfg:
@@ -70,7 +75,7 @@ samplers:
   drop_last:          False
   shuffle:            True 
   # Policy 1: At each slot is assigned a RandomSampler
-  balancing_policy: 1 # 0, 1, 2 
+  balancing_policy: 0 # 0, 1, 2 
 val_skip:             False # whether to let the samplers skip some **sub**tasks
 train_skip:           True
 
@@ -85,6 +90,7 @@ dataset_cfg:
   split:            [0.9, 0.1]
   demo_T:           4
   obs_T:            7
+  normalize_action: True
   take_first_frame: ${policy.concat_target_obj_embedding}
   data_augs:        ${augs}
   non_sequential:   False
@@ -95,6 +101,8 @@ dataset_cfg:
   use_strong_augs:  True 
   select_random_frames: True
   compute_obj_distribution: True
+  agent_name: 'panda'
+  demo_name: 'sawyer'
 
 augs:
   strong_jitter:     0.01    

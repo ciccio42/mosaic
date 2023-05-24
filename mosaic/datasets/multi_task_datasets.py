@@ -24,7 +24,7 @@ ENV_OBJECTS = {
     'pick_place': {
         'obj_names': ['milk', 'bread', 'cereal', 'can'],
         # [[0.195, 0.255], [0.045, 0.105], [-0.105, -0.045], [-0.255, -0.195]]
-        'ranges': [[0.16, 0.19], [0.05, 0.09], [-0.08, -0.03], [-0.19, -0.15]],
+        'ranges': [[0.195, 0.255], [0.045, 0.105], [-0.105, -0.045], [-0.255, -0.195]],
     },
     'nut_assembly': {
         'obj_names': ['nut0', 'nut1', 'nut2'],
@@ -270,7 +270,7 @@ class MultiTaskPairedDataset(Dataset):
         weak_scale = data_augs.get('weak_crop_scale', (0.8, 1.0))
         weak_ratio = data_augs.get('weak_crop_ratio', (1.6, 1.8))
         randcrop = RandomResizedCrop(
-            size=(height, width), scale=weak_scale, ratio=weak_ratio)
+            size=(height, width), scale=weak_scale, ratio=weak_ratio, antialias=True)
         if data_augs.use_affine:
             randcrop = RandomAffine(degrees=0, translate=(data_augs.get(
                 'rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
@@ -296,7 +296,7 @@ class MultiTaskPairedDataset(Dataset):
             RandomApply(
                 [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.01),
             RandomResizedCrop(
-                size=(height, width), scale=strong_scale, ratio=strong_ratio),
+                size=(height, width), scale=strong_scale, ratio=strong_ratio, antialias=True),
             self.normalize,
         ])
 
@@ -311,7 +311,7 @@ class MultiTaskPairedDataset(Dataset):
             obs = self.toTensor(obs)
             # only this resize+crop is task-specific
             obs = resized_crop(obs, top=top, left=left, height=box_h,
-                               width=box_w, size=(self.height, self.width))
+                               width=box_w, size=(self.height, self.width), antialias=True)
 
             if self.use_strong_augs and second:
                 augmented = self.strong_augs(obs)
@@ -614,6 +614,7 @@ class DIYBatchSampler(Sampler):
         self.task_iterators = OrderedDict()
         self.task_info = OrderedDict()
         self.balancing_policy = sampler_spec.get('balancing_policy', 0)
+        print(f"Balancing policy: {self.balancing_policy}")
         self.object_distribution_to_indx = object_distribution_to_indx
         self.num_step = n_step
         for spec in tasks_spec:

@@ -1,3 +1,15 @@
+import faulthandler
+import robosuite.utils.transform_utils as T
+import mujoco_py
+import os
+import torch
+from robosuite.utils import RandomizationError
+from robosuite.utils.transform_utils import quat2axisangle
+from robosuite import load_controller_config
+from robosuite_env.custom_ik_wrapper import normalize_action
+import random
+from pyquaternion import Quaternion
+import pybullet as p
 import sys
 from pathlib import Path
 
@@ -6,18 +18,9 @@ if str(Path.cwd()) not in sys.path:
 import numpy as np
 from robosuite_env import get_env
 from mosaic.datasets import Trajectory
-import pybullet as p
-from pyquaternion import Quaternion
-import random
-from robosuite_env.custom_ik_wrapper import normalize_action
-from robosuite import load_controller_config
-from robosuite.utils.transform_utils import quat2axisangle
-from robosuite.utils import RandomizationError
-import torch
-import os
-import mujoco_py
-import robosuite.utils.transform_utils as T
-import faulthandler
+import cv2
+import time
+
 faulthandler.enable()
 # in case rebuild is needed to use GPU render: sudo mkdir -p /usr/lib/nvidia-000
 # export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/lib/nvidia-000
@@ -288,7 +291,11 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         env.sim.forward()
         use_object = env.object_id
         traj.append(obs, raw_state=mj_state, info={'status': 'start'})
+        time.sleep(5)
+
         for t in range(int(env.horizon // 10)):
+            # cv2.imwrite(
+            #     f"/home/frosa_loc/Multi-Task-LFD-Framework/mujoco_test/frame_{t}.png", obs['image'][:, :, ::-1])
             action, status = controller.act(obs)
             obs, reward, done, info = env.step(action)
             assert 'status' not in info.keys(
@@ -319,5 +326,6 @@ if __name__ == '__main__':
 
     config = load_controller_config(default_controller='IK_POSE')
     for i in range(0, 16):
+        print("Get expert trajectory")
         traj = get_expert_trajectory('PandaPickPlaceDistractor', config,
-                                     renderer=True, camera_obs=False, task=i, render_camera='agentview')
+                                     renderer=False, camera_obs=True, task=i, render_camera='agentview')
