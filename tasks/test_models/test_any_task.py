@@ -40,6 +40,8 @@ from robosuite_env.controllers.expert_nut_assembly import \
     get_expert_trajectory as nut_expert
 from robosuite_env.controllers.expert_basketball import \
     get_expert_trajectory as basketball_expert
+from robosuite_env.controllers.old_expert_pick_place import \
+    get_expert_trajectory as old_place_expert
 from robosuite import load_controller_config
 import warnings
 
@@ -65,7 +67,7 @@ TASK_MAP = {
     },
     'pick_place': {
         'num_variations':   16,
-        'env_fn':   place_expert,
+        'env_fn':   old_place_expert,
         'eval_fn':  pick_place_eval,
         'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
         'render_hw': (100, 180),  # (150, 270)
@@ -230,6 +232,8 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     context = select_random_frames(
         teacher_expert_rollout, T_context, sample_sides=True, random_frames=random_frames)
     # convert BGR context image to RGB and scale to 0-1
+    for i in range(4):
+        cv2.imwrite(f"context_{i}.png", np.array(context[i][:, :, ::-1]))
     context = [img_formatter(i[:, :, ::-1]/255)[None] for i in context]
     # assert len(context ) == 6
     if isinstance(context[0], np.ndarray):

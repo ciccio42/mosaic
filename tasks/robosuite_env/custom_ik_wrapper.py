@@ -16,29 +16,19 @@ def normalize_action(action, ranges):
 def denormalize_action(norm_action, base_pos, base_quat, ranges):
     action = np.clip(norm_action.copy(), -1, 1)
     for d in range(ranges.shape[0]):
-        action[d] = (0.5 * (action[d] + 1) *
-                     (ranges[d, 1] - ranges[d, 0])) + ranges[d, 0]
+        action[d] = 0.5 * (action[d] + 1) * \
+            (ranges[d, 1] - ranges[d, 0]) + ranges[d, 0]
     if norm_action.shape[0] == 7:
-        R_w_new_ee = T.quat2mat(T.axisangle2quat(action[3:6]))
-        R_ee_world = T.matrix_inverse(T.quat2mat(base_quat))
-        R_ee_new_ee = R_ee_world @ R_w_new_ee
-        euler = T.mat2euler(R_ee_new_ee)
-        aa = T.quat2axisangle(T.mat2quat(T.euler2mat(euler)))
+        cmd_quat = T.axisangle2quat(action[3:6])
+        quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
+        aa = T.quat2axisangle(quat)
         return np.concatenate((action[:3] - base_pos, aa, action[6:]))
     else:
         cmd_quat = Quaternion(angle=action[3] * np.pi, axis=action[4:7])
         cmd_quat = np.array([cmd_quat.x, cmd_quat.y, cmd_quat.z, cmd_quat.w])
-        R_w_new_ee = T.quat2mat(cmd_quat)
-        R_ee_world = T.matrix_inverse(T.quat2mat(base_quat))
-        R_ee_new_ee = R_ee_world @ R_w_new_ee
-        euler = T.mat2euler(R_ee_new_ee)
-        aa = T.quat2axisangle(T.mat2quat(T.euler2mat(euler)))
+        quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
+        aa = T.quat2axisangle(quat)
         return np.concatenate((action[:3] - base_pos, aa, action[7:]))
-        # cmd_quat = Quaternion(angle=action[3] * np.pi, axis=action[4:7])
-        # cmd_quat = np.array([cmd_quat.x, cmd_quat.y, cmd_quat.z, cmd_quat.w])
-        # quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
-        # aa = T.quat2axisangle(quat)
-        # return np.concatenate((action[:3] - base_pos, aa, action[7:]))
 
 
 def get_rel_action(action, base_pos, base_quat):
@@ -48,11 +38,11 @@ def get_rel_action(action, base_pos, base_quat):
         aa = T.quat2axisangle(quat)
         return np.concatenate((action[:3] - base_pos, aa, action[6:]))
     else:
-        cmd_quat = Quaternion(angle=action[3], axis=action[4:7])
+        cmd_quat = Quaternion(angle=action[3] * np.pi, axis=action[4:7])
         cmd_quat = np.array([cmd_quat.x, cmd_quat.y, cmd_quat.z, cmd_quat.w])
         quat = T.quat_multiply(T.quat_inverse(base_quat), cmd_quat)
         aa = T.quat2axisangle(quat)
-    return np.concatenate((action[:3] - base_pos, aa, action[7:]))
+        return np.concatenate((action[:3] - base_pos, aa, action[7:]))
 
 
 def project_point(point, sim, camera='agentview', frame_width=320, frame_height=320):
@@ -117,14 +107,11 @@ class CustomIKWrapper(Wrapper):
         self.action_repeat = 5
         self.ranges = ranges
 
-    def step(self, action, eval=False):
+    def step(self, action):
         reward = -100.0
-        action_repeat = self.action_repeat
-        for _ in range(action_repeat):
+        for _ in range(self.action_repeat):
             base_pos = self.env.sim.data.site_xpos[self.env.robots[0].eef_site_id]
-            base_quat = T.mat2quat(np.reshape(
-                self.env.sim.data.site_xmat[self.env.robots[0].eef_site_id], (3, 3)))
-            # base_quat = self.env._eef_xquat
+            base_quat = self.env._eef_xquat
             rel_action = denormalize_action(
                 action, base_pos, base_quat, self.ranges)
             obs, reward_t, done, info = self.env.step(rel_action)

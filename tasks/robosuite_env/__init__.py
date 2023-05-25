@@ -1,10 +1,18 @@
-def get_env(env_name, ranges, **kwargs):
+def get_env(env_name,  ranges, old_pp=False, **kwargs):
     if env_name == 'SawyerPickPlaceDistractor':
-        from robosuite_env.tasks.new_pp import SawyerPickPlace
-        env = SawyerPickPlace
+        if not old_pp:
+            from robosuite_env.tasks.new_pp import SawyerPickPlace
+            env = SawyerPickPlace
+        else:
+            from robosuite_env.tasks.pick_place import SawyerPickPlaceDistractor
+            env = SawyerPickPlaceDistractor
     elif env_name == 'PandaPickPlaceDistractor':
-        from robosuite_env.tasks.new_pp import PandaPickPlace
-        env = PandaPickPlace
+        if not old_pp:
+            from robosuite_env.tasks.new_pp import PandaPickPlace
+            env = PandaPickPlace
+        else:
+            from robosuite_env.tasks.pick_place import PandaPickPlaceDistractor
+            env = PandaPickPlaceDistractor
     elif env_name == 'PandaNutAssemblyDistractor':
         from robosuite_env.tasks.nut_assembly import PandaNutAssemblyDistractor
         env = PandaNutAssemblyDistractor
@@ -49,6 +57,6 @@ def get_env(env_name, ranges, **kwargs):
         env = SawyerDoor
     else:
         raise NotImplementedError
-    
+
     from robosuite_env.custom_ik_wrapper import CustomIKWrapper
     return CustomIKWrapper(env(**kwargs), ranges=ranges)
