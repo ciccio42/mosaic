@@ -19,6 +19,7 @@ import copy
 from copy import deepcopy
 from functools import reduce
 from operator import concat
+import cv2
 
 ENV_OBJECTS = {
     'pick_place': {
@@ -312,7 +313,8 @@ class MultiTaskPairedDataset(Dataset):
             # only this resize+crop is task-specific
             obs = resized_crop(obs, top=top, left=left, height=box_h,
                                width=box_w, size=(self.height, self.width), antialias=True)
-
+            # cv2.imwrite("cropped.png", np.moveaxis(
+            #     obs.numpy()*255, 0, -1))
             if self.use_strong_augs and second:
                 augmented = self.strong_augs(obs)
             else:
@@ -391,7 +393,7 @@ class MultiTaskPairedDataset(Dataset):
                         int(i * per_bracket), int((i + 1) * per_bracket)))
                 # frames.append(_make_frame(n))
                 # convert from BGR to RGB and scale to 0-1 range
-                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1]/255)
+                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1])
                 processed = self.frame_aug(task_name, obs)
                 frames.append(processed)
                 if self.aug_twice:
@@ -431,8 +433,7 @@ class MultiTaskPairedDataset(Dataset):
                     n = start_moving + int((end_moving-start_moving)/2)
 
                 # convert from BGR to RGB and scale to 0-1 range
-                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1]/255)
-
+                obs = copy.copy(traj.get(n)['obs']['image'][:, :, ::-1])
                 processed = self.frame_aug(task_name, obs)
                 frames.append(processed)
                 if self.aug_twice:
@@ -504,7 +505,8 @@ class MultiTaskPairedDataset(Dataset):
                     t] = self._selected_target_frame_distribution_task_object_target_position[task_name][t] + 1
 
             step_t = traj.get(t)
-            image = copy.copy(step_t['obs']['image'][:, :, ::-1]/255)
+            image = copy.copy(step_t['obs']['image'][:, :, ::-1])
+            cv2.imwrite("obs.png", np.array(image))
             processed = self.frame_aug(task_name, image)
             images.append(processed)
             if self.aug_twice:

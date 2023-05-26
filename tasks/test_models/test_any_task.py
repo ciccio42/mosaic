@@ -234,7 +234,7 @@ def build_env_context(img_formatter, T_context=4, ctr=0, env_name='nut',
     # convert BGR context image to RGB and scale to 0-1
     for i in range(4):
         cv2.imwrite(f"context_{i}.png", np.array(context[i][:, :, ::-1]))
-    context = [img_formatter(i[:, :, ::-1]/255)[None] for i in context]
+    context = [img_formatter(i[:, :, ::-1])[None] for i in context]
     # assert len(context ) == 6
     if isinstance(context[0], np.ndarray):
         context = torch.from_numpy(np.concatenate(context, 0))[None]

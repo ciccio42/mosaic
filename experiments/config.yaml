@@ -200,7 +200,7 @@ attn:
     network_flag:   0 # e.g Res18  
     out_feature:    256
     drop_dim:       3
-    pretrained:     True 
+    pretrained:     False 
 
 tosil:
   _target_:         mosaic.models.baselines.InverseImitation 
