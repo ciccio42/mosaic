@@ -65,7 +65,7 @@ def get_action(model, target_obj_dec, states, images, context, gpu_id, n_steps, 
                     target_obj_position['target_obj_pred']).to('cpu').tolist()
             else:
                 predicted_prob = None
-    action[3:7] = [1.0, 1.0, 0.0, 0.0]
+    # action[3:7] = [1.0, 1.0, 0.0, 0.0]
     action[-1] = 1 if action[-1] > 0 and n_steps < max_T - 1 else -1
     return action, predicted_prob
 
@@ -292,7 +292,7 @@ def pick_place_eval(model, target_obj_dec, env, context, gpu_id, variation_id, i
         states.append(np.concatenate(
             (obs['ee_aa'], obs['gripper_qpos'])).astype(np.float32)[None])
         # convert observation from BGR to RGB and scale to 0-1
-        # cv2.imwrite("prova.png", np.array(obs['image'][:, :, ::-1]))
+        cv2.imwrite("prova.png", np.array(obs['image'][:, :, ::-1]))
         images.append(img_formatter(obs['image'][:, :, ::-1])[None])
         action, target_pred = get_action(
             model,

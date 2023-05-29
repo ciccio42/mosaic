@@ -11,7 +11,7 @@ from einops import rearrange, reduce, repeat
 class ResNetFeats(nn.Module):
     def __init__(self, out_dim=256, output_raw=False, drop_dim=1, use_resnet18=False, pretrained=False):
         super(ResNetFeats, self).__init__()
-        print('pretrain', pretrained)
+        print('Backbone Pretrained:', pretrained)
         torchvision_version = torchvision.__version__
         if not torchvision_version.split('+')[0] in '0.9.1':
             if pretrained and use_resnet18:

@@ -274,12 +274,12 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         for t in range(int(env.horizon // 10)):
             action, status = controller.act(obs)
             obs, reward, done, info = env.step(action)
-            # try:
-            #     os.makedirs(f"task_{task}")
-            # except:
-            #     pass
-            # cv2.imwrite(f"task_{task}/task_{task}_{t}.png",
-            #             np.array(obs['image']))
+            try:
+                os.makedirs(f"task_{task}")
+            except:
+                pass
+            cv2.imwrite(f"task_{task}/task_{task}.png",
+                        np.array(obs['image']))
             assert 'status' not in info.keys(
             ), "Don't overwrite information returned from environment. "
             info['status'] = status

@@ -242,6 +242,7 @@ class MultiTaskPairedDataset(Dataset):
                         count += 1
 
             self.task_crops[name] = spec.get('crop', [0, 0, 0, 0])
+            print(f"Task crop {self.task_crops}")
 
         print('Done loading Task {}, agent/demo trajctores pairs reach a count of: {}'.format(name, count))
         self.pairs_count = count
@@ -276,11 +277,12 @@ class MultiTaskPairedDataset(Dataset):
             randcrop = RandomAffine(degrees=0, translate=(data_augs.get(
                 'rand_trans', 0.1), data_augs.get('rand_trans', 0.1)))
         self.transforms = transforms.Compose([  # normalize at the end
-            RandomApply([weak_jitter], p=0.1),
+            RandomApply([weak_jitter], p=0.0),
             RandomApply(
                 [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.1),
-            randcrop,
-            self.normalize])
+            randcrop
+            # self.normalize
+        ])
 
         self.use_strong_augs = use_strong_augs
         print("Using strong augmentations?", use_strong_augs)
@@ -291,14 +293,14 @@ class MultiTaskPairedDataset(Dataset):
         strong_scale = data_augs.get('strong_crop_scale', (0.2, 0.76))
         strong_ratio = data_augs.get('strong_crop_ratio', (1.2, 1.8))
         self.strong_augs = transforms.Compose([
-            RandomApply([strong_jitter], p=0.05),
+            RandomApply([strong_jitter], p=0.00),
             self.grayscale,
             RandomHorizontalFlip(p=data_augs.get('flip', 0)),
             RandomApply(
-                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.01),
+                [GaussianBlur(kernel_size=5, sigma=data_augs.get('blur', (0.1, 2.0)))], p=0.00),
             RandomResizedCrop(
-                size=(height, width), scale=strong_scale, ratio=strong_ratio, antialias=True),
-            self.normalize,
+                size=(height, width), scale=strong_scale, ratio=strong_ratio, antialias=True)
+            # self.normalize,
         ])
 
         def frame_aug(task_name, obs, second=False):
@@ -309,6 +311,7 @@ class MultiTaskPairedDataset(Dataset):
             box_h, box_w = img_height - top - \
                 crop_params[1], img_width - left - crop_params[3]
 
+            # cv2.imwrite("obs.png", np.array(obs))
             obs = self.toTensor(obs)
             # only this resize+crop is task-specific
             obs = resized_crop(obs, top=top, left=left, height=box_h,
@@ -320,7 +323,8 @@ class MultiTaskPairedDataset(Dataset):
             else:
                 augmented = self.transforms(obs)
             assert augmented.shape == obs.shape
-
+            # cv2.imwrite("augmented.png", np.moveaxis(
+            #     augmented.numpy()*255, 0, -1))
             return augmented
         self.frame_aug = frame_aug
 
@@ -387,7 +391,7 @@ class MultiTaskPairedDataset(Dataset):
                 if i == self._demo_T - 1:
                     n = len(traj) - 1
                 elif i == 0:
-                    n = 0
+                    n = 1
                 else:
                     n = clip(np.random.randint(
                         int(i * per_bracket), int((i + 1) * per_bracket)))

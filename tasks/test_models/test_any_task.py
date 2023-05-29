@@ -40,8 +40,8 @@ from robosuite_env.controllers.expert_nut_assembly import \
     get_expert_trajectory as nut_expert
 from robosuite_env.controllers.expert_basketball import \
     get_expert_trajectory as basketball_expert
-from robosuite_env.controllers.old_expert_pick_place import \
-    get_expert_trajectory as old_place_expert
+# from robosuite_env.controllers.old_expert_pick_place import \
+#     get_expert_trajectory as old_place_expert
 from robosuite import load_controller_config
 import warnings
 
@@ -67,10 +67,10 @@ TASK_MAP = {
     },
     'pick_place': {
         'num_variations':   16,
-        'env_fn':   old_place_expert,
+        'env_fn':   place_expert,
         'eval_fn':  pick_place_eval,
         'agent-teacher': ('PandaPickPlaceDistractor', 'SawyerPickPlaceDistractor'),
-        'render_hw': (100, 180),  # (150, 270)
+        'render_hw': (200, 360),  # (150, 270)
     },
     'stack_block': {
         'num_variations':   6,
@@ -116,13 +116,13 @@ def select_random_frames(frames, n_select, sample_sides=True, random_frames=True
             if sample_sides and i == n_select - 1:
                 n = len(frames) - 1
             elif sample_sides and i == 0:
-                n = 0
+                n = 1
             selected_frames.append(n)
     else:
         for i in range(n_select):
             # get first frame
             if i == 0:
-                n = 0
+                n = 1
             # get the last frame
             elif i == n_select - 1:
                 n = len(frames) - 1
@@ -166,13 +166,13 @@ def build_tvf_formatter(config, env_name='stack'):
     dataset_cfg = config.train_cfg.dataset
     height, width = dataset_cfg.get(
         'height', 100), dataset_cfg.get('width', 180)
-    task_spec = config.get(env_name, dict())
+    task_spec = config.tasks_cfgs.get(env_name, dict())
     # if 'baseline' in config.policy._target_: # yaml for the CMU baseline is messed up
     #     crop_params = [10, 50, 70, 70] if env_name == 'place' else [0,0,0,0]
 
     # assert task_spec, 'Must go back to the saved config file to get crop params for this task: '+env_name
     crop_params = task_spec.get('crop', [0, 0, 0, 0])
-    # print(crop_params)
+    print(crop_params)
     top, left = crop_params[0], crop_params[2]
 
     def resize_crop(img):
@@ -186,9 +186,9 @@ def build_tvf_formatter(config, env_name='stack'):
         obs = ToTensor()(img.copy())
         obs = resized_crop(obs, top=top, left=left, height=box_h, width=box_w,
                            size=(height, width))
-
-        obs = Normalize(mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225])(obs)
+        cv2.imwrite("cropped.png", np.moveaxis(obs.numpy()*255, 0, -1))
+        # obs = Normalize(mean=[0.485, 0.456, 0.406],
+        #                 std=[0.229, 0.224, 0.225])(obs)
 
         return obs
     return resize_crop

@@ -1,4 +1,5 @@
 def get_env(env_name,  ranges, old_pp=False, **kwargs):
+    print(f"Old pp {old_pp}")
     if env_name == 'SawyerPickPlaceDistractor':
         if not old_pp:
             from robosuite_env.tasks.new_pp import SawyerPickPlace

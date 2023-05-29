@@ -224,15 +224,16 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         mujoco_py.cymj), 'Make sure to render with GPU to make eval faster'
     # reassign the gpu id
     visible_ids = os.environ['CUDA_VISIBLE_DEVICES'].split(',')
+    print(f"Visible ids: {visible_ids}")
     gpu_id = int(visible_ids[gpu_id])
-
+    print(f"GPU id {gpu_id}")
     seed = seed if seed is not None else random.getrandbits(32)
     env_seed = seed if env_seed is None else env_seed
     seed_offset = sum([int(a) for a in bytes(env_type, 'ascii')])
     np.random.seed(env_seed)
     if 'Sawyer' in env_type:
         action_ranges = np.array(
-            [[-0.05, 0.25], [-0.45, 0.5], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
+            [[-0.3, 0.3], [-0.3, 0.3], [0.82, 1.2], [-5, 5], [-5, 5], [-5, 5]])
     else:
         action_ranges = np.array(
             [[-0.3, 0.3], [-0.3, 0.3], [0.78, 1.2], [-1, 1], [-1, 1], [-1, 1], [-1, 1]])
@@ -309,10 +310,9 @@ def get_expert_trajectory(env_type, controller_type, renderer=False, camera_obs=
         time.sleep(5)
 
         for t in range(int(env.horizon // 10)):
-            # cv2.imwrite(
-            #     f"/home/frosa_loc/Multi-Task-LFD-Framework/mujoco_test/frame_{t}.png", obs['image'][:, :, ::-1])
             action, status = controller.act(obs)
             obs, reward, done, info = env.step(action)
+            cv2.imwrite("obs.png", obs['image'][:, :, ::-1])
             assert 'status' not in info.keys(
             ), "Don't overwrite information returned from environment. "
             info['status'] = status
