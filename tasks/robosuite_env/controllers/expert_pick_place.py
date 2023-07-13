@@ -102,9 +102,9 @@ class PickPlaceController:
         self._obj_thr = 0.10
 
     def _object_in_hand(self, obs):
-        dist_panda = {'milk': 0.05, 'can': 0.018,
+        dist_panda = {'milk': 0.018, 'can': 0.018,
                       'cereal': 0.018, 'bread': 0.018}
-        dist_sawyer = {'milk': 0.05, 'can': 0.018,
+        dist_sawyer = {'milk': 0.018, 'can': 0.018,
                        'cereal': 0.018, 'bread': 0.018}
         if "Panda" in self._env.robot_names:
             dist = dist_panda
